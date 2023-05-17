@@ -2,7 +2,7 @@ name: DuckDB Workflow Trigger
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 2 * * *"
+    - cron: "17 0 * * *"
 
 jobs:
   build-linux:
