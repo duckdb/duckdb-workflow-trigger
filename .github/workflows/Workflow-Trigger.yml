@@ -25,5 +25,4 @@ jobs:
     - name: Trigger DuckDB-Wasm workflow (in duckdb)
       if: ${{ github.event_name == 'workflow_dispatch' }}
       run: |
-        curl -XPOST -u "${{secrets.PAT_USER}}:${{secrets.PAT_TOKEN}}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" https://api.github.com/repos/duckdb/duckdb/actions/workflows/Wasm.yml/dispatches --data '{"ref":"refs/heads/main","inputs":{"release_s3":"true", "duckdb-ref":"d5c4422f72"}}'
-        curl -XPOST -u "${{secrets.PAT_USER}}:${{secrets.PAT_TOKEN}}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" https://api.github.com/repos/duckdb/duckdb-wasm/actions/workflows/main.yml/dispatches --data '{"ref":"refs/heads/main"}'
+        curl -XPOST -u "${{secrets.PAT_USER}}:${{secrets.PAT_TOKEN}}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" https://api.github.com/repos/duckdb/duckdb/actions/workflows/Wasm.yml/dispatches --data '{"ref":"refs/heads/main","inputs":{"release_s3":"true", "duckdb-ref":"af3c38cbed"}}'
