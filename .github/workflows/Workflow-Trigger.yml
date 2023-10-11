@@ -19,6 +19,7 @@ jobs:
       if: ${{ github.event_name != 'workflow_dispatch' }}
       run: |
         ./trigger.sh duckdb '{"event_type": "nightly-build"}'
+        ./trigger.sh duckdb-node '{"event_type": "nightly-build"}'
 
     - name: Trigger DuckDB workflows (feature)
       if: ${{ github.event_name != 'workflow_dispatch' }}
