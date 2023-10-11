@@ -8,21 +8,25 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
 
+    env:
+      PAT_USER: ${{ secrets.PAT_USER }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+
     steps:
     - uses: actions/checkout@v3
 
     - name: Trigger DuckDB workflows (main branch)
       if: ${{ github.event_name != 'workflow_dispatch' }}
       run: |
-        curl -XPOST -u "${{secrets.PAT_USER}}:${{secrets.PAT_TOKEN}}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" https://api.github.com/repos/duckdb/duckdb/dispatches --data '{"event_type": "nightly-build"}'
+        ./trigger.sh duckdb '{"event_type": "nightly-build"}'
 
     - name: Trigger DuckDB workflows (feature)
       if: ${{ github.event_name != 'workflow_dispatch' }}
       run: |
-        curl -XPOST -u "${{secrets.PAT_USER}}:${{secrets.PAT_TOKEN}}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" https://api.github.com/repos/duckdb/duckdb/actions/workflows/NightlyTests.yml/dispatches --data '{"ref":"refs/heads/feature"}'
-        curl -XPOST -u "${{secrets.PAT_USER}}:${{secrets.PAT_TOKEN}}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" https://api.github.com/repos/duckdb/duckdb/actions/workflows/OSX.yml/dispatches --data '{"ref":"refs/heads/feature"}'
+        ./trigger.sh duckdb '{"ref":"refs/heads/feature"}' NightlyTests.yml
+        ./trigger.sh duckdb '{"ref":"refs/heads/feature"}' OSX.yml
 
     - name: Trigger DuckDB-Wasm workflow (in duckdb)
       if: ${{ github.event_name == 'workflow_dispatch' }}
       run: |
-        curl -XPOST -u "${{secrets.PAT_USER}}:${{secrets.PAT_TOKEN}}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" https://api.github.com/repos/duckdb/duckdb/actions/workflows/Wasm.yml/dispatches --data '{"ref":"refs/heads/main","inputs":{"release_s3":"true", "duckdb-ref":"v0.9.1"}}'
+        ./trigger.sh duckdb '{"ref":"refs/heads/main","inputs":{"release_s3":"true", "duckdb-ref":"v0.9.1"}}' Wasm.yml
