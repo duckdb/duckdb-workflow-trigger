@@ -21,5 +21,5 @@ fi
 echo "Triggering $REPO with data $DATA"
 echo "URL: $URL"
 
-curl -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data '$(DATA)'
+curl -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
 
