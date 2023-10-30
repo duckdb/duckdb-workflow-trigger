@@ -1,6 +1,11 @@
 name: DuckDB Workflow Trigger
 on:
   workflow_dispatch:
+    inputs:
+      # Git ref of the duckdb repo
+      duckdb-ref:
+        required: true
+        type: string
   schedule:
     - cron: "17 0 * * *"
 
@@ -30,4 +35,4 @@ jobs:
     - name: Trigger DuckDB-Wasm workflow (in duckdb)
       if: ${{ github.event_name == 'workflow_dispatch' }}
       run: |
-        ./trigger.sh duckdb '{"ref":"refs/heads/main","inputs":{"release_s3":"true", "duckdb-ref":"v0.9.1"}}' Wasm.yml
+        ./trigger.sh duckdb '{"ref":"refs/heads/main","inputs":{"release_s3":"true", "duckdb-ref":"${{ github.event.inputs.duckdb-ref }}"}}' Wasm.yml
