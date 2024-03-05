@@ -36,6 +36,6 @@ jobs:
         ./trigger.sh duckdb '{"ref":"refs/heads/feature"}' OSX.yml
 
     - name: Trigger DuckDB-Wasm workflow (in duckdb)
-      if: ${{ github.event_name == 'workflow_dispatch' }}
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.trigger-nightly == 0 }}
       run: |
         ./trigger.sh duckdb '{"ref":"refs/heads/main","inputs":{"release_s3":"true", "duckdb-ref":"${{ github.event.inputs.duckdb-ref }}"}}' Wasm.yml
