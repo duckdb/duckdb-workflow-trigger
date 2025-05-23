@@ -31,7 +31,7 @@ jobs:
       run: |
         ./trigger.sh duckdb '{"ref": "refs/heads/main"}' NightlyTests.yml
         ./trigger.sh duckdb '{"ref": "refs/heads/v1.3-ossivalis"}' NightlyTests.yml
-        ./trigger.sh duckdb '{"ref": "refs/heads/v1.3-ossivalis", "inputs": {"skip_tests": "false", "git_ref": "v1.3-ossivalis", "run_all": "true", "twine_upload": "true"}}' InvokeCI.yml
+        # ./trigger.sh duckdb '{"ref": "refs/heads/v1.3-ossivalis", "inputs": {"skip_tests": "false", "git_ref": "v1.3-ossivalis", "run_all": "true", "twine_upload": "true"}}' InvokeCI.yml
         #./trigger.sh duckdb '{"event_type": "nightly-build"}'
 
     - name: Trigger DuckDB-Wasm workflow (in duckdb)
