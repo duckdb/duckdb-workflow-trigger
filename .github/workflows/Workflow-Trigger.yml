@@ -36,7 +36,7 @@ jobs:
         ./trigger.sh duckdb '{"ref": "refs/heads/v1.4-andium"}' Main.yml
         ./trigger.sh duckdb '{"ref": "refs/heads/v1.5-variegata"}' Main.yml
         ./trigger.sh duckdb '{"ref": "refs/heads/v1.4-andium", "inputs": {"skip_tests": "false", "git_ref": "v1.4-andium", "run_all": "true", "twine_upload": "true"}}' InvokeCI.yml
-        ./trigger.sh duckdb '{"ref": "refs/heads/v1.5-variegata", "inputs": {"skip_tests": "false", "git_ref": "v1.4-andium", "run_all": "true", "twine_upload": "true"}}' InvokeCI.yml
+        ./trigger.sh duckdb '{"ref": "refs/heads/v1.5-variegata", "inputs": {"skip_tests": "false", "git_ref": "v1.5-variegata", "run_all": "true", "twine_upload": "true"}}' InvokeCI.yml
         ./trigger.sh duckdb '{"ref": "refs/heads/main", "inputs": {"skip_tests": "false", "git_ref": "main", "run_all": "true", "twine_upload": "true"}}' InvokeCI.yml
         ./trigger.sh ducklake '{"ref": "refs/heads/v1.4-andium"}' MainDistributionPipeline.yml
         #./trigger.sh duckdb '{"event_type": "nightly-build"}'
