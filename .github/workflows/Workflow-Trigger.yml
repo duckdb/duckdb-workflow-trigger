@@ -29,6 +29,7 @@ jobs:
       # Additionally, run NightlyTests on the main branch just to see that we dont break anything. (no upload)
       # After 1.4 is released, we should run InvokeCI on both branches so that we publish nightly artifacts for the main (v1.4) branch too
       run: |
+        ./trigger.sh duckdb '{"ref": "refs/heads/main"}' IssuesCloseStale.yml
         ./trigger.sh duckdb '{"ref": "refs/heads/main"}' NightlyTests.yml
         ./trigger.sh duckdb '{"ref": "refs/heads/v1.4-andium"}' NightlyTests.yml
         ./trigger.sh duckdb '{"ref": "refs/heads/v1.5-variegata"}' NightlyTests.yml
