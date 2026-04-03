@@ -21,24 +21,84 @@ jobs:
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
-    - name: Trigger DuckDB workflows (main branch)
+    - name: Checkout DuckDB upstream repository
       if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.trigger-nightly }}
-      # Run InvokeCI on the v1.4-andium branch (which will publish nightly python and extensions)
-      # Additionally, run NightlyTests on the main branch just to see that we dont break anything. (no upload)
-      # After 1.4 is released, we should run InvokeCI on both branches so that we publish nightly artifacts for the main (v1.4) branch too
+      uses: actions/checkout@v4
+      with:
+        repository: duckdb/duckdb
+        fetch-depth: 0
+        path: duckdb-upstream
+
+    - name: Discover changed DuckDB branches (last 48h)
+      id: changed-branches
+      if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.trigger-nightly }}
+      run: |
+        set -euo pipefail
+
+        repo_dir="duckdb-upstream"
+        git -C "$repo_dir" fetch --prune origin "+refs/heads/*:refs/remotes/origin/*"
+
+        now_epoch="$(date -u +%s)"
+        cutoff_epoch="$((now_epoch - 48 * 60 * 60))"
+
+        changed_file="$(mktemp)"
+        candidates=0
+        changed=0
+
+        echo "Scanning DuckDB branches for updates in the last 48 hours..."
+        while IFS= read -r remote_ref; do
+          branch="${remote_ref#refs/remotes/origin/}"
+
+          if [[ "$branch" != "main" ]] && [[ ! "$branch" =~ ^v[1-9][0-9]*\.[0-9]+- ]]; then
+            continue
+          fi
+
+          candidates=$((candidates + 1))
+          branch_epoch="$(git -C "$repo_dir" log -1 --format=%ct "$remote_ref")"
+          branch_iso="$(date -u -d "@$branch_epoch" '+%Y-%m-%dT%H:%M:%SZ')"
+
+          if [[ "$branch_epoch" -ge "$cutoff_epoch" ]]; then
+            echo "Changed: $branch (tip: $branch_iso)"
+            echo "$branch" >> "$changed_file"
+            changed=$((changed + 1))
+          else
+            echo "Unchanged: $branch (tip: $branch_iso)"
+          fi
+        done < <(git -C "$repo_dir" for-each-ref --format='%(refname)' refs/remotes/origin)
+
+        echo "Evaluated $candidates candidate branch(es); $changed changed branch(es)."
+        echo "changed_branches<<EOF" >> "$GITHUB_OUTPUT"
+        cat "$changed_file" >> "$GITHUB_OUTPUT"
+        echo "EOF" >> "$GITHUB_OUTPUT"
+
+    - name: Trigger DuckDB branch workflows (changed branches)
+      if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.trigger-nightly }}
+      env:
+        CHANGED_BRANCHES: ${{ steps.changed-branches.outputs.changed_branches }}
+      run: |
+        set -euo pipefail
+
+        changed_branches="${CHANGED_BRANCHES:-}"
+
+        if [[ -z "${changed_branches//[$'\t\r\n ']}" ]]; then
+          echo "No eligible branch changed in the last 48 hours; skipping branch-scoped dispatches."
+          exit 0
+        fi
+
+        while IFS= read -r branch; do
+          [[ -z "$branch" ]] && continue
+          echo "Dispatching branch-scoped workflows for $branch"
+          ./trigger.sh duckdb "$(printf '{"ref":"refs/heads/%s"}' "$branch")" NightlyTests.yml
+          ./trigger.sh duckdb "$(printf '{"ref":"refs/heads/%s"}' "$branch")" Main.yml
+          ./trigger.sh duckdb "$(printf '{"ref":"refs/heads/%s","inputs":{"skip_tests":"false","git_ref":"%s","run_all":"true","twine_upload":"true"}}' "$branch" "$branch")" InvokeCI.yml
+        done <<< "$changed_branches"
+
+    - name: Trigger non-gated workflows
+      if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.trigger-nightly }}
       run: |
         ./trigger.sh duckdb '{"ref": "refs/heads/main"}' IssuesCloseStale.yml
-        ./trigger.sh duckdb '{"ref": "refs/heads/main"}' NightlyTests.yml
-        ./trigger.sh duckdb '{"ref": "refs/heads/v1.4-andium"}' NightlyTests.yml
-        ./trigger.sh duckdb '{"ref": "refs/heads/v1.5-variegata"}' NightlyTests.yml
-        ./trigger.sh duckdb '{"ref": "refs/heads/main"}' Main.yml
-        ./trigger.sh duckdb '{"ref": "refs/heads/v1.4-andium"}' Main.yml
-        ./trigger.sh duckdb '{"ref": "refs/heads/v1.5-variegata"}' Main.yml
-        ./trigger.sh duckdb '{"ref": "refs/heads/v1.4-andium", "inputs": {"skip_tests": "false", "git_ref": "v1.4-andium", "run_all": "true", "twine_upload": "true"}}' InvokeCI.yml
-        ./trigger.sh duckdb '{"ref": "refs/heads/v1.5-variegata", "inputs": {"skip_tests": "false", "git_ref": "v1.5-variegata", "run_all": "true", "twine_upload": "true"}}' InvokeCI.yml
-        ./trigger.sh duckdb '{"ref": "refs/heads/main", "inputs": {"skip_tests": "false", "git_ref": "main", "run_all": "true", "twine_upload": "true"}}' InvokeCI.yml
         ./trigger.sh ducklake '{"ref": "refs/heads/v1.4-andium"}' MainDistributionPipeline.yml
         #./trigger.sh duckdb '{"event_type": "nightly-build"}'
 
