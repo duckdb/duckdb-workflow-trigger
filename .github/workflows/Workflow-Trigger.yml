@@ -31,7 +31,7 @@ jobs:
         fetch-depth: 0
         path: duckdb-upstream
 
-    - name: Discover changed DuckDB branches (last 24h)
+    - name: Discover changed DuckDB branches (last 48h)
       id: changed-branches
       if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.trigger-nightly }}
       run: |
@@ -41,13 +41,13 @@ jobs:
         git -C "$repo_dir" fetch --prune origin "+refs/heads/*:refs/remotes/origin/*"
 
         now_epoch="$(date -u +%s)"
-        cutoff_epoch="$((now_epoch - 24 * 60 * 60))"
+        cutoff_epoch="$((now_epoch - 48 * 60 * 60))"
 
         changed_file="$(mktemp)"
         candidates=0
         changed=0
 
-        echo "Scanning DuckDB branches for updates in the last 24 hours..."
+        echo "Scanning DuckDB branches for updates in the last 48 hours..."
         while IFS= read -r remote_ref; do
           branch="${remote_ref#refs/remotes/origin/}"
 
@@ -83,7 +83,7 @@ jobs:
         changed_branches="${CHANGED_BRANCHES:-}"
 
         if [[ -z "${changed_branches//[$'\t\r\n ']}" ]]; then
-          echo "No eligible branch changed in the last 24 hours; skipping branch-scoped dispatches."
+          echo "No eligible branch changed in the last 48 hours; skipping branch-scoped dispatches."
           exit 0
         fi
 
