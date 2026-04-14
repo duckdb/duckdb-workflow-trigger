@@ -11,6 +11,8 @@ on:
         type: boolean
   schedule:
     - cron: "17 0 * * *"
+    - cron: "30 9 * * 1-5"
+    - cron: "30 10 * * 1-5"
 
 jobs:
   build-linux:
@@ -23,8 +25,50 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Config
+      id: config
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        EVENT_SCHEDULE: ${{ github.event.schedule }}
+        TRIGGER_NIGHTLY: ${{ github.event.inputs.trigger-nightly }}
+      run: |
+        set -euo pipefail
+
+        run_nightly=false
+        if [[ "$EVENT_NAME" == "schedule" && "$EVENT_SCHEDULE" == "17 0 * * *" ]]; then
+          run_nightly=true
+        elif [[ "$EVENT_NAME" == "workflow_dispatch" && "$TRIGGER_NIGHTLY" == "true" ]]; then
+          run_nightly=true
+        fi
+
+        run_cache_warmup=false
+        if [[ "$EVENT_NAME" == "schedule" && ( "$EVENT_SCHEDULE" == "30 9 * * 1-5" || "$EVENT_SCHEDULE" == "30 10 * * 1-5" ) ]]; then
+          ams_offset="$(TZ=Europe/Amsterdam date '+%z')"
+          case "$EVENT_SCHEDULE" in
+            "30 9 * * 1-5")
+              # 09:30 UTC should correspond to 11:30 in CEST (+0200).
+              [[ "$ams_offset" == "+0200" ]] && run_cache_warmup=true
+              ;;
+            "30 10 * * 1-5")
+              # 10:30 UTC should correspond to 11:30 in CET (+0100).
+              [[ "$ams_offset" == "+0100" ]] && run_cache_warmup=true
+              ;;
+          esac
+        fi
+
+        echo "run_nightly=$run_nightly" >> "$GITHUB_OUTPUT"
+        echo "run_cache_warmup=$run_cache_warmup" >> "$GITHUB_OUTPUT"
+
+    - name: Warmup cache for workflow Main
+      if: ${{ fromJSON(steps.config.outputs.run_cache_warmup) }}
+      run: |
+        set -euo pipefail
+
+        branch="main"
+        ./trigger.sh duckdb "$(printf '{"ref":"refs/heads/%s","inputs":{"skip_tests":"true"}}' "$branch")" Main.yml
+
     - name: Checkout DuckDB upstream repository
-      if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.trigger-nightly }}
+      if: ${{ fromJSON(steps.config.outputs.run_nightly) }}
       uses: actions/checkout@v4
       with:
         repository: duckdb/duckdb
@@ -33,7 +77,7 @@ jobs:
 
     - name: Discover changed DuckDB branches (last 48h)
       id: changed-branches
-      if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.trigger-nightly }}
+      if: ${{ fromJSON(steps.config.outputs.run_nightly) }}
       run: |
         set -euo pipefail
 
@@ -74,7 +118,7 @@ jobs:
         echo "EOF" >> "$GITHUB_OUTPUT"
 
     - name: Trigger DuckDB branch workflows (changed branches)
-      if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.trigger-nightly }}
+      if: ${{ fromJSON(steps.config.outputs.run_nightly) }}
       env:
         CHANGED_BRANCHES: ${{ steps.changed-branches.outputs.changed_branches }}
       run: |
@@ -96,7 +140,7 @@ jobs:
         done <<< "$changed_branches"
 
     - name: Trigger non-gated workflows
-      if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.trigger-nightly }}
+      if: ${{ fromJSON(steps.config.outputs.run_nightly) }}
       run: |
         ./trigger.sh duckdb '{"ref": "refs/heads/main"}' IssuesCloseStale.yml
         ./trigger.sh ducklake '{"ref": "refs/heads/v1.4-andium"}' MainDistributionPipeline.yml
