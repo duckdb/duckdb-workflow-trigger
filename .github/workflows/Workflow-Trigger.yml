@@ -136,7 +136,11 @@ jobs:
           echo "Dispatching branch-scoped workflows for $branch"
           ./trigger.sh duckdb "$(printf '{"ref":"refs/heads/%s"}' "$branch")" NightlyTests.yml
           ./trigger.sh duckdb "$(printf '{"ref":"refs/heads/%s"}' "$branch")" Main.yml
-          ./trigger.sh duckdb "$(printf '{"ref":"refs/heads/%s","inputs":{"skip_tests":"false","git_ref":"%s","run_all":"true","twine_upload":"true"}}' "$branch" "$branch")" InvokeCI.yml
+          if [[ "$branch" == "main" ]]; then
+            ./trigger.sh duckdb "$(printf '{"ref":"refs/heads/%s","inputs":{"skip_tests":false,"git_ref":"%s","run_all":true,"twine_upload":"true"}}' "$branch" "$branch")" InvokeCI.yml
+          else
+            ./trigger.sh duckdb "$(printf '{"ref":"refs/heads/%s","inputs":{"skip_tests":"false","git_ref":"%s","run_all":"true","twine_upload":"true"}}' "$branch" "$branch")" InvokeCI.yml
+          fi
         done <<< "$changed_branches"
 
     - name: Trigger non-gated workflows
