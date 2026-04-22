@@ -136,10 +136,11 @@ jobs:
           echo "Dispatching branch-scoped workflows for $branch"
           ./trigger.sh duckdb "$(printf '{"ref":"refs/heads/%s"}' "$branch")" NightlyTests.yml
           ./trigger.sh duckdb "$(printf '{"ref":"refs/heads/%s"}' "$branch")" Main.yml
-          if [[ "$branch" == "main" ]]; then
-            ./trigger.sh duckdb "$(printf '{"ref":"refs/heads/%s","inputs":{"skip_tests":false,"git_ref":"%s","run_all":true,"twine_upload":"true"}}' "$branch" "$branch")" InvokeCI.yml
-          else
+          if [[ "$branch" =~ ^v1\.[0-5]- ]]; then
+            echo "Dispatching InvokeCI.yml for release branch family v1.0-*..v1.5-: $branch"
             ./trigger.sh duckdb "$(printf '{"ref":"refs/heads/%s","inputs":{"skip_tests":"false","git_ref":"%s","run_all":"true","twine_upload":"true"}}' "$branch" "$branch")" InvokeCI.yml
+          else
+            echo "Skipping InvokeCI.yml for $branch (allowed only for v1.0-*..v1.5- branches)"
           fi
         done <<< "$changed_branches"
 
