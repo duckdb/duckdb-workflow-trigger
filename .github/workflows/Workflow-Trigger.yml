@@ -148,6 +148,7 @@ jobs:
       if: ${{ fromJSON(steps.config.outputs.run_nightly) }}
       run: |
         ./trigger.sh duckdb '{"ref": "refs/heads/main"}' IssuesCloseStale.yml
+        ./trigger.sh duckdb '{"ref": "refs/heads/main"}' MirrorStalePRSubmittedIssues.yml
         ./trigger.sh ducklake '{"ref": "refs/heads/v1.4-andium"}' MainDistributionPipeline.yml
         #./trigger.sh duckdb '{"event_type": "nightly-build"}'
 
