@@ -16,7 +16,6 @@ on:
 
 jobs:
   build-linux:
-    if: false
     runs-on: ubuntu-latest
 
     env:
