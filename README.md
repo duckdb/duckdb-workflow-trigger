@@ -25,7 +25,14 @@ Downstream workflows receive:
 - `payload`, for example `{"phase":"core_ready"}` or
   `{"phase":"client_ready","name":"python"}`
 
-Endpoints are configured in `endpoints.yml`.
+Endpoints are configured in `endpoints.yml` and grouped by hook:
+
+```yaml
+hooks:
+  core_ready:
+    python:
+      workflow: duckdb/duckdb-python/OnCoreReady.yml@main
+```
 
 ## Local MinIO Run
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import yaml
 
@@ -17,53 +16,76 @@ class Endpoint:
     repo: str
     workflow: str
     ref: str = "main"
-    enabled: bool = True
 
 
 def load_endpoints(path: Path) -> list[Endpoint]:
     with path.open("r", encoding="utf-8") as handle:
         data = yaml.safe_load(handle) or {}
 
-    endpoints_data = data.get("endpoints")
-    if not isinstance(endpoints_data, list):
-        raise ValueError("endpoint config must contain an endpoints list")
+    hooks = data.get("hooks")
+    if not isinstance(hooks, dict):
+        raise ValueError("endpoint config must contain a hooks mapping")
 
     endpoints: list[Endpoint] = []
-    for index, raw in enumerate(endpoints_data):
-        if not isinstance(raw, dict):
-            raise ValueError(f"endpoint {index} must be a mapping")
-        endpoints.append(_parse_endpoint(raw, index))
+    for hook, hook_endpoints in hooks.items():
+        hook_name = _non_empty_string(hook, "hook name")
+        if not isinstance(hook_endpoints, dict):
+            raise ValueError(f"hook {hook_name} must contain an endpoint mapping")
+        for name, raw_endpoint in hook_endpoints.items():
+            endpoint_name = _non_empty_string(name, f"endpoint name for hook {hook_name}")
+            if not isinstance(raw_endpoint, dict):
+                raise ValueError(f"endpoint {hook_name}.{endpoint_name} must be a mapping")
+            workflow_target = raw_endpoint.get("workflow")
+            if not workflow_target:
+                raise ValueError(f"endpoint {hook_name}.{endpoint_name} is missing workflow")
+            owner, repo, workflow, ref = _parse_workflow_target(
+                _non_empty_string(workflow_target, f"workflow for {hook_name}.{endpoint_name}"),
+                f"{hook_name}.{endpoint_name}",
+            )
+            endpoints.append(
+                Endpoint(
+                    name=endpoint_name,
+                    hook=hook_name,
+                    owner=owner,
+                    repo=repo,
+                    workflow=workflow,
+                    ref=ref,
+                )
+            )
     return endpoints
 
 
 def matching_endpoints(endpoints: list[Endpoint], state: ReleaseState) -> list[Endpoint]:
-    return [
-        endpoint
-        for endpoint in endpoints
-        if endpoint.enabled and endpoint.hook == state.event
-    ]
+    return [endpoint for endpoint in endpoints if endpoint.hook == state.event]
 
 
 def registered_client_names(endpoints: list[Endpoint]) -> set[str]:
     return {
         endpoint.name
         for endpoint in endpoints
-        if endpoint.enabled and endpoint.name and endpoint.hook in {"core_ready", "client_ready"}
+        if endpoint.name and endpoint.hook in {"core_ready", "client_ready"}
     }
 
 
-def _parse_endpoint(raw: dict[str, Any], index: int) -> Endpoint:
-    required = ["name", "hook", "owner", "repo", "workflow"]
-    missing = [field for field in required if not raw.get(field)]
-    if missing:
-        raise ValueError(f"endpoint {index} is missing required field(s): {', '.join(missing)}")
+def _parse_workflow_target(target: str, context: str) -> tuple[str, str, str, str]:
+    workflow_path, separator, ref = target.rpartition("@")
+    if not separator:
+        raise ValueError(f"endpoint {context} workflow must include @ref")
 
-    return Endpoint(
-        name=str(raw["name"]),
-        hook=str(raw["hook"]),
-        owner=str(raw["owner"]),
-        repo=str(raw["repo"]),
-        workflow=str(raw["workflow"]),
-        ref=str(raw.get("ref") or "main"),
-        enabled=bool(raw.get("enabled", True)),
+    parts = workflow_path.split("/")
+    if len(parts) != 3:
+        raise ValueError(f"endpoint {context} workflow must be owner/repo/workflow.yml@ref")
+
+    owner, repo, workflow = parts
+    return (
+        _non_empty_string(owner, f"owner for {context}"),
+        _non_empty_string(repo, f"repo for {context}"),
+        _non_empty_string(workflow, f"workflow for {context}"),
+        _non_empty_string(ref, f"ref for {context}"),
     )
+
+
+def _non_empty_string(value: object, context: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{context} must be a non-empty string")
+    return value.strip()

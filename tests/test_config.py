@@ -1,19 +1,19 @@
 from pathlib import Path
 
+import pytest
+
 from release_dispatcher.config import load_endpoints, matching_endpoints, registered_client_names
 from release_dispatcher.models import parse_release_state
 
 
-def test_load_endpoints_defaults_ref(tmp_path: Path):
+def test_load_endpoints_from_grouped_hooks(tmp_path: Path):
     config = tmp_path / "endpoints.yml"
     config.write_text(
         """
-endpoints:
-  - name: python
-    hook: core_ready
-    owner: duckdb
-    repo: duckdb-python
-    workflow: OnCoreReady.yml
+hooks:
+  core_ready:
+    python:
+      workflow: duckdb/duckdb-python/OnCoreReady.yml@main
 """,
         encoding="utf-8",
     )
@@ -21,31 +21,25 @@ endpoints:
     endpoints = load_endpoints(config)
 
     assert len(endpoints) == 1
+    assert endpoints[0].name == "python"
+    assert endpoints[0].hook == "core_ready"
+    assert endpoints[0].owner == "duckdb"
+    assert endpoints[0].repo == "duckdb-python"
+    assert endpoints[0].workflow == "OnCoreReady.yml"
     assert endpoints[0].ref == "main"
-    assert endpoints[0].enabled is True
 
 
-def test_matching_endpoints_filters_disabled_and_hook(tmp_path: Path):
+def test_matching_endpoints_filters_by_hook(tmp_path: Path):
     config = tmp_path / "endpoints.yml"
     config.write_text(
         """
-endpoints:
-  - name: python
-    hook: core_ready
-    owner: duckdb
-    repo: duckdb-python
-    workflow: OnCoreReady.yml
-  - name: disabled
-    hook: core_ready
-    owner: duckdb
-    repo: disabled
-    workflow: OnCoreReady.yml
-    enabled: false
-  - name: other
-    hook: client_ready
-    owner: duckdb
-    repo: other
-    workflow: OnClientReady.yml
+hooks:
+  core_ready:
+    python:
+      workflow: duckdb/duckdb-python/OnCoreReady.yml@main
+  client_ready:
+    other:
+      workflow: duckdb/other/OnClientReady.yml@stable
 """,
         encoding="utf-8",
     )
@@ -61,7 +55,25 @@ endpoints:
     assert [endpoint.name for endpoint in endpoints] == ["python"]
 
 
-def test_registered_client_names_uses_enabled_endpoints(tmp_path: Path):
+def test_registered_client_names_uses_grouped_endpoints(tmp_path: Path):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        """
+hooks:
+  core_ready:
+    python:
+      workflow: duckdb/duckdb-python/OnCoreReady.yml@main
+  client_ready:
+    r:
+      workflow: duckdb/duckdb-r/OnClientReady.yml@main
+""",
+        encoding="utf-8",
+    )
+
+    assert registered_client_names(load_endpoints(config)) == {"python", "r"}
+
+
+def test_load_endpoints_rejects_legacy_list_schema(tmp_path: Path):
     config = tmp_path / "endpoints.yml"
     config.write_text(
         """
@@ -71,14 +83,25 @@ endpoints:
     owner: duckdb
     repo: duckdb-python
     workflow: OnCoreReady.yml
-  - name: disabled
-    hook: core_ready
-    owner: duckdb
-    repo: disabled
-    workflow: OnCoreReady.yml
-    enabled: false
 """,
         encoding="utf-8",
     )
 
-    assert registered_client_names(load_endpoints(config)) == {"python"}
+    with pytest.raises(ValueError, match="hooks mapping"):
+        load_endpoints(config)
+
+
+def test_load_endpoints_rejects_malformed_workflow_target(tmp_path: Path):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        """
+hooks:
+  core_ready:
+    python:
+      workflow: duckdb/duckdb-python/OnCoreReady.yml
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="must include @ref"):
+        load_endpoints(config)

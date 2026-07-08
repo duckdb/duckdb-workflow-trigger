@@ -33,12 +33,10 @@ class FakeDispatcher:
 def write_config(path: Path):
     path.write_text(
         """
-endpoints:
-  - name: python
-    hook: core_ready
-    owner: duckdb
-    repo: duckdb-python
-    workflow: OnCoreReady.yml
+hooks:
+  core_ready:
+    python:
+      workflow: duckdb/duckdb-python/OnCoreReady.yml@main
 """,
         encoding="utf-8",
     )

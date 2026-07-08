@@ -91,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
     dispatcher = GitHubDispatcher(token=args.github_token or "", dry_run=args.dry_run_github)
     endpoints_to_dispatch = matching_endpoints(endpoints, state)
     if not endpoints_to_dispatch:
-        print(f"No enabled endpoints registered for hook {state.event}")
+        print(f"No endpoints registered for hook {state.event}")
         return 0
 
     for endpoint in endpoints_to_dispatch:
