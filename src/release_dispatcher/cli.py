@@ -43,7 +43,25 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_validate_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Validate DuckDB release endpoint config")
+    parser.add_argument("command", choices=["validate-endpoints"])
+    parser.add_argument("--endpoint-config", default="endpoints.yml")
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
+    argv = argv if argv is not None else sys.argv[1:]
+    if argv[:1] == ["validate-endpoints"]:
+        parser = build_validate_parser()
+        args = parser.parse_args(argv)
+        try:
+            endpoints = load_endpoints(Path(args.endpoint_config))
+        except ValueError as exc:
+            parser.error(str(exc))
+        print(f"Validated {len(endpoints)} endpoint(s) in {args.endpoint_config}")
+        return 0
+
     parser = build_parser()
     args = parser.parse_args(argv)
 

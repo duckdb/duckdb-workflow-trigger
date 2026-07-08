@@ -1,4 +1,4 @@
-.PHONY: up test typecheck
+.PHONY: up validate-endpoints test typecheck
 
 AWS_ACCESS_KEY_ID ?= minioadmin
 AWS_SECRET_ACCESS_KEY ?= minioadmin
@@ -17,6 +17,9 @@ export DRY_RUN_GITHUB
 up:
 	docker compose up -d minio
 	docker compose run --rm create-bucket
+
+validate-endpoints:
+	uv run release-dispatcher validate-endpoints --endpoint-config endpoints.yml
 
 test:
 	uv run pytest

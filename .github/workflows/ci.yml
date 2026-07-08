@@ -20,6 +20,9 @@ jobs:
       - name: Start MinIO
         run: make up
 
+      - name: Validate endpoints
+        run: make validate-endpoints
+
       - name: Run tests
         env:
           AWS_ACCESS_KEY_ID: minioadmin
