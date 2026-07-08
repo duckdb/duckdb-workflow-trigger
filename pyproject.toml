@@ -1,0 +1,35 @@
+[project]
+name = "duckdb-workflow-trigger"
+version = "0.1.0"
+description = "Dispatch DuckDB release state events to downstream repositories"
+requires-python = ">=3.11"
+dependencies = [
+    "boto3>=1.34",
+    "duckdb>=1.0",
+    "pyyaml>=6.0",
+    "requests>=2.31",
+]
+
+[project.scripts]
+release-dispatcher = "release_dispatcher.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/release_dispatcher"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100

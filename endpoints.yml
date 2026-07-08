@@ -1,0 +1,8 @@
+endpoints:
+  - name: python
+    hook: core_ready
+    owner: duckdb
+    repo: duckdb-python
+    workflow: OnCoreReady.yml
+    ref: main
+    enabled: true
