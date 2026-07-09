@@ -3,7 +3,9 @@ from pathlib import Path
 from release_dispatcher.config import load_endpoints
 
 
-def test_repository_endpoints_file_parses():
+def test_repository_endpoints_file_includes_required_hooks():
     endpoints = load_endpoints(Path("endpoints.yml"))
 
-    assert [(endpoint.hook, endpoint.name) for endpoint in endpoints] == [("core_ready", "python")]
+    hooks = {endpoint.hook for endpoint in endpoints}
+
+    assert {"core_ready", "client_ready"} <= hooks

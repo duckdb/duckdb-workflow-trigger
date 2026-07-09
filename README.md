@@ -3,20 +3,11 @@
 This repository contains the existing nightly workflow trigger and a release event
 dispatcher for DuckDB release state.
 
-## Release Dispatch
+## Usage
 
 The release dispatcher accepts `core_ready` and `client_ready` workflow dispatch
 events, creates an immutable state file in S3, and dispatches successful events
 to registered downstream repository workflows.
-
-State is written to:
-
-- `s3://$RELEASE_STATE_BUCKET/$duckdb_version/core/state.json`
-- `s3://$RELEASE_STATE_BUCKET/$duckdb_version/clients/$client/state.json`
-
-Duplicate state writes fail by using S3 create-only semantics. The GitHub
-workflow also queues duplicate event/version/client runs with a concurrency
-group and `cancel-in-progress: false`.
 
 Downstream workflows receive:
 
@@ -25,16 +16,57 @@ Downstream workflows receive:
 - `payload`, for example `{"phase":"core_ready"}` or
   `{"phase":"client_ready","name":"python"}`
 
-Endpoints are configured in `endpoints.yml` and grouped by hook:
+### Configure endpoints
+
+Endpoints are configured in `endpoints.yml` and grouped by hook. Each entry uses
+`owner/repo/workflow.yml@ref` as its workflow target.
 
 ```yaml
 hooks:
   core_ready:
     python:
       workflow: duckdb/duckdb-python/OnCoreReady.yml@main
+  client_ready:
+    r:
+      workflow: duckdb/duckdb-r/OnClientReady.yml@main
 ```
 
-## Local MinIO Run
+Use `core_ready` for workflows that should run after the DuckDB core release is
+ready. Use `client_ready` for workflows that should run after a specific client
+release is ready.
+
+To add a downstream workflow, register it under the appropriate hook in
+`endpoints.yml`. For `client_ready`, use the client name as the mapping key so
+the state file and outbound payload stay aligned with the downstream release.
+
+### Run the dispatcher locally
+
+Run a dry-run dispatch against the configured endpoints:
+
+```sh
+uv run release-dispatcher \
+  --event core_ready \
+  --duckdb-version v1.2.3 \
+  --duckdb-commit 0123456789abcdef0123456789abcdef01234567 \
+  --status success
+```
+
+For `client_ready`, add `--client <name>`. Set `--dry-run-github` or
+`DRY_RUN_GITHUB=true` to print the GitHub workflow dispatch request instead of
+calling the GitHub API.
+
+## Development
+
+Release state is written to immutable S3 keys:
+
+- `s3://$RELEASE_STATE_BUCKET/$duckdb_version/core/state.json`
+- `s3://$RELEASE_STATE_BUCKET/$duckdb_version/clients/$client/state.json`
+
+Duplicate state writes fail by using S3 create-only semantics. The GitHub
+workflow also queues duplicate event/version/client runs with a concurrency
+group and `cancel-in-progress: false`.
+
+### Local MinIO setup
 
 Start a local S3-compatible bucket:
 
