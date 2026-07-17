@@ -35,9 +35,7 @@ def write_config(path: Path):
         """
 hooks:
   core_ready:
-    python:
-      workflows:
-        - duckdb/duckdb-python/OnCoreReady.yml@main
+    - duckdb/duckdb-python/OnCoreReady.yml@main
 """,
         encoding="utf-8",
     )

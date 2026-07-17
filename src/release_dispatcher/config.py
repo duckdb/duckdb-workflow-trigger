@@ -29,27 +29,21 @@ def load_endpoints(path: Path) -> list[Endpoint]:
     endpoints: list[Endpoint] = []
     for hook, hook_endpoints in hooks.items():
         hook_name = _non_empty_string(hook, "hook name")
+        if isinstance(hook_endpoints, list):
+            endpoints.extend(_endpoints_for_targets(hook_name, hook_name, hook_endpoints, hook_name))
+            continue
         if not isinstance(hook_endpoints, dict):
-            raise ValueError(f"hook {hook_name} must contain an endpoint mapping")
-        for name, raw_endpoint in hook_endpoints.items():
+            raise ValueError(f"hook {hook_name} must contain a workflow list or endpoint mapping")
+        for name, workflow_targets in hook_endpoints.items():
             endpoint_name = _non_empty_string(name, f"endpoint name for hook {hook_name}")
-            if not isinstance(raw_endpoint, dict):
-                raise ValueError(f"endpoint {hook_name}.{endpoint_name} must be a mapping")
-            for workflow_target, context in _workflow_targets(raw_endpoint, f"{hook_name}.{endpoint_name}"):
-                owner, repo, workflow, ref = _parse_workflow_target(
-                    workflow_target,
-                    context,
+            endpoints.extend(
+                _endpoints_for_targets(
+                    endpoint_name,
+                    hook_name,
+                    workflow_targets,
+                    f"{hook_name}.{endpoint_name}",
                 )
-                endpoints.append(
-                    Endpoint(
-                        name=endpoint_name,
-                        hook=hook_name,
-                        owner=owner,
-                        repo=repo,
-                        workflow=workflow,
-                        ref=ref,
-                    )
-                )
+            )
     return endpoints
 
 
@@ -64,22 +58,31 @@ def registered_client_names(endpoints: list[Endpoint]) -> set[str]:
     return {
         endpoint.name
         for endpoint in endpoints
-        if endpoint.name and endpoint.hook in {"core_ready", "client_ready"}
+        if endpoint.name and endpoint.hook == "client_ready"
     }
 
 
-def _workflow_targets(raw_endpoint: dict, context: str) -> list[tuple[str, str]]:
-    workflow_targets = raw_endpoint.get("workflows")
-    if "workflow" in raw_endpoint:
-        raise ValueError(f"endpoint {context} must use workflows")
-    if workflow_targets:
-        if not isinstance(workflow_targets, list):
-            raise ValueError(f"endpoint {context} workflows must be a list")
-        return [
-            (_non_empty_string(target, f"workflow for {context}[{index}]"), f"{context}[{index}]")
-            for index, target in enumerate(workflow_targets)
-        ]
-    raise ValueError(f"endpoint {context} is missing workflows")
+def _endpoints_for_targets(name: str, hook: str, workflow_targets: object, context: str) -> list[Endpoint]:
+    if not isinstance(workflow_targets, list):
+        raise ValueError(f"endpoint {context} must be a workflow list")
+
+    endpoints: list[Endpoint] = []
+    for index, workflow_target in enumerate(workflow_targets):
+        owner, repo, workflow, ref = _parse_workflow_target(
+            _non_empty_string(workflow_target, f"workflow for {context}[{index}]"),
+            f"{context}[{index}]",
+        )
+        endpoints.append(
+            Endpoint(
+                name=name,
+                hook=hook,
+                owner=owner,
+                repo=repo,
+                workflow=workflow,
+                ref=ref,
+            )
+        )
+    return endpoints
 
 
 def _parse_workflow_target(target: str, context: str) -> tuple[str, str, str, str]:

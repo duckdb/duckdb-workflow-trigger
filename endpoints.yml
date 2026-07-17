@@ -1,14 +1,11 @@
 hooks:
   # Trigger downstream workflows after DuckDB core release artifacts are ready.
   core_ready:
-    python:
-      # Format: owner/repo/workflow.yml@ref
-      workflows:
-        - duckdb/duckdb-python/OnCoreReady.yml@main
+    # Format: owner/repo/workflow.yml@ref
+    - duckdb/duckdb-python/OnCoreReady.yml@main
 
   # Trigger client-specific workflows after a client release is ready.
   client_ready:
     r:
       # Format: owner/repo/workflow.yml@ref
-      workflows:
-        - duckdb/duckdb-r/OnClientReady.yml@main
+      - duckdb/duckdb-r/OnClientReady.yml@main
