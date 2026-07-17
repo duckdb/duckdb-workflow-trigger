@@ -19,25 +19,28 @@ Downstream workflows receive:
 ### Configure endpoints
 
 Endpoints are configured in `endpoints.yml` and grouped by hook. Each entry uses
-`owner/repo/workflow.yml@ref` as its workflow target.
+`workflows` with one or more `owner/repo/workflow.yml@ref` targets.
 
 ```yaml
 hooks:
   core_ready:
     python:
-      workflow: duckdb/duckdb-python/OnCoreReady.yml@main
+      workflows:
+        - duckdb/duckdb-python/OnCoreReady.yml@main
   client_ready:
-    r:
-      workflow: duckdb/duckdb-r/OnClientReady.yml@main
+    python:
+      workflows:
+        - duckdb/foo/OnClientReady.yml@main
+        - duckdb/bar/OnClientReady.yml@main
 ```
 
 Use `core_ready` for workflows that should run after the DuckDB core release is
 ready. Use `client_ready` for workflows that should run after a specific client
-release is ready.
+release is ready. A hook entry can dispatch to one or more `workflows`.
 
 To add a downstream workflow, register it under the appropriate hook in
 `endpoints.yml`. For `client_ready`, use the client name as the mapping key so
-the state file and outbound payload stay aligned with the downstream release.
+the outbound payload stays aligned with the downstream release.
 
 ### Run the dispatcher locally
 

@@ -35,23 +35,21 @@ def load_endpoints(path: Path) -> list[Endpoint]:
             endpoint_name = _non_empty_string(name, f"endpoint name for hook {hook_name}")
             if not isinstance(raw_endpoint, dict):
                 raise ValueError(f"endpoint {hook_name}.{endpoint_name} must be a mapping")
-            workflow_target = raw_endpoint.get("workflow")
-            if not workflow_target:
-                raise ValueError(f"endpoint {hook_name}.{endpoint_name} is missing workflow")
-            owner, repo, workflow, ref = _parse_workflow_target(
-                _non_empty_string(workflow_target, f"workflow for {hook_name}.{endpoint_name}"),
-                f"{hook_name}.{endpoint_name}",
-            )
-            endpoints.append(
-                Endpoint(
-                    name=endpoint_name,
-                    hook=hook_name,
-                    owner=owner,
-                    repo=repo,
-                    workflow=workflow,
-                    ref=ref,
+            for workflow_target, context in _workflow_targets(raw_endpoint, f"{hook_name}.{endpoint_name}"):
+                owner, repo, workflow, ref = _parse_workflow_target(
+                    workflow_target,
+                    context,
                 )
-            )
+                endpoints.append(
+                    Endpoint(
+                        name=endpoint_name,
+                        hook=hook_name,
+                        owner=owner,
+                        repo=repo,
+                        workflow=workflow,
+                        ref=ref,
+                    )
+                )
     return endpoints
 
 
@@ -68,6 +66,20 @@ def registered_client_names(endpoints: list[Endpoint]) -> set[str]:
         for endpoint in endpoints
         if endpoint.name and endpoint.hook in {"core_ready", "client_ready"}
     }
+
+
+def _workflow_targets(raw_endpoint: dict, context: str) -> list[tuple[str, str]]:
+    workflow_targets = raw_endpoint.get("workflows")
+    if "workflow" in raw_endpoint:
+        raise ValueError(f"endpoint {context} must use workflows")
+    if workflow_targets:
+        if not isinstance(workflow_targets, list):
+            raise ValueError(f"endpoint {context} workflows must be a list")
+        return [
+            (_non_empty_string(target, f"workflow for {context}[{index}]"), f"{context}[{index}]")
+            for index, target in enumerate(workflow_targets)
+        ]
+    raise ValueError(f"endpoint {context} is missing workflows")
 
 
 def _parse_workflow_target(target: str, context: str) -> tuple[str, str, str, str]:

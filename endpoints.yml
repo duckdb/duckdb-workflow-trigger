@@ -3,10 +3,12 @@ hooks:
   core_ready:
     python:
       # Format: owner/repo/workflow.yml@ref
-      workflow: duckdb/duckdb-python/OnCoreReady.yml@main
+      workflows:
+        - duckdb/duckdb-python/OnCoreReady.yml@main
 
   # Trigger client-specific workflows after a client release is ready.
   client_ready:
     r:
       # Format: owner/repo/workflow.yml@ref
-      workflow: duckdb/duckdb-r/OnClientReady.yml@main
+      workflows:
+        - duckdb/duckdb-r/OnClientReady.yml@main

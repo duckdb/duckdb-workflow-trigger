@@ -13,7 +13,8 @@ def test_load_endpoints_from_grouped_hooks(tmp_path: Path):
 hooks:
   core_ready:
     python:
-      workflow: duckdb/duckdb-python/OnCoreReady.yml@main
+      workflows:
+        - duckdb/duckdb-python/OnCoreReady.yml@main
 """,
         encoding="utf-8",
     )
@@ -36,10 +37,12 @@ def test_matching_endpoints_filters_by_hook(tmp_path: Path):
 hooks:
   core_ready:
     python:
-      workflow: duckdb/duckdb-python/OnCoreReady.yml@main
+      workflows:
+        - duckdb/duckdb-python/OnCoreReady.yml@main
   client_ready:
     other:
-      workflow: duckdb/other/OnClientReady.yml@stable
+      workflows:
+        - duckdb/other/OnClientReady.yml@stable
 """,
         encoding="utf-8",
     )
@@ -62,9 +65,12 @@ def test_matching_endpoints_filters_client_ready_by_client_name(tmp_path: Path):
 hooks:
   client_ready:
     python:
-      workflow: duckdb/duckdb-python/OnClientReady.yml@main
+      workflows:
+        - duckdb/foo/OnClientReady.yml@main
+        - duckdb/bar/OnClientReady.yml@stable
     r:
-      workflow: duckdb/duckdb-r/OnClientReady.yml@stable
+      workflows:
+        - duckdb/duckdb-r/OnClientReady.yml@stable
 """,
         encoding="utf-8",
     )
@@ -78,7 +84,27 @@ hooks:
 
     endpoints = matching_endpoints(load_endpoints(config), state)
 
-    assert [endpoint.name for endpoint in endpoints] == ["python"]
+    assert [endpoint.name for endpoint in endpoints] == ["python", "python"]
+    assert [(endpoint.repo, endpoint.workflow, endpoint.ref) for endpoint in endpoints] == [
+        ("foo", "OnClientReady.yml", "main"),
+        ("bar", "OnClientReady.yml", "stable"),
+    ]
+
+
+def test_load_endpoints_rejects_singular_workflow_key(tmp_path: Path):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        """
+hooks:
+  client_ready:
+    python:
+      workflow: duckdb/duckdb-python/OnClientReady.yml@main
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="must use workflows"):
+        load_endpoints(config)
 
 
 def test_registered_client_names_uses_grouped_endpoints(tmp_path: Path):
@@ -88,10 +114,12 @@ def test_registered_client_names_uses_grouped_endpoints(tmp_path: Path):
 hooks:
   core_ready:
     python:
-      workflow: duckdb/duckdb-python/OnCoreReady.yml@main
+      workflows:
+        - duckdb/duckdb-python/OnCoreReady.yml@main
   client_ready:
     r:
-      workflow: duckdb/duckdb-r/OnClientReady.yml@main
+      workflows:
+        - duckdb/duckdb-r/OnClientReady.yml@main
 """,
         encoding="utf-8",
     )
@@ -124,7 +152,8 @@ def test_load_endpoints_rejects_malformed_workflow_target(tmp_path: Path):
 hooks:
   core_ready:
     python:
-      workflow: duckdb/duckdb-python/OnCoreReady.yml
+      workflows:
+        - duckdb/duckdb-python/OnCoreReady.yml
 """,
         encoding="utf-8",
     )
