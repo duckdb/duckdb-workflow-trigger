@@ -55,6 +55,32 @@ hooks:
     assert [endpoint.name for endpoint in endpoints] == ["python"]
 
 
+def test_matching_endpoints_filters_client_ready_by_client_name(tmp_path: Path):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        """
+hooks:
+  client_ready:
+    python:
+      workflow: duckdb/duckdb-python/OnClientReady.yml@main
+    r:
+      workflow: duckdb/duckdb-r/OnClientReady.yml@stable
+""",
+        encoding="utf-8",
+    )
+    state = parse_release_state(
+        event="client_ready",
+        duckdb_version="v1.2.3",
+        duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+        status="success",
+        client="python",
+    )
+
+    endpoints = matching_endpoints(load_endpoints(config), state)
+
+    assert [endpoint.name for endpoint in endpoints] == ["python"]
+
+
 def test_registered_client_names_uses_grouped_endpoints(tmp_path: Path):
     config = tmp_path / "endpoints.yml"
     config.write_text(

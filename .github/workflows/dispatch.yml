@@ -68,15 +68,24 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Run dispatcher
+        env:
+          DISPATCH_EVENT: ${{ inputs.event }}
+          DISPATCH_DUCKDB_VERSION: ${{ inputs.duckdb_version }}
+          DISPATCH_DUCKDB_COMMIT: ${{ inputs.duckdb_commit }}
+          DISPATCH_STATUS: ${{ inputs.status }}
+          DISPATCH_CLIENT: ${{ inputs.client }}
+          DISPATCH_MESSAGE: ${{ inputs.message }}
+          DISPATCH_SOURCE_WORKFLOW: ${{ inputs.source_workflow }}
+          DISPATCH_SOURCE_RUN_ID: ${{ inputs.source_run_id }}
         run: |
           set -euo pipefail
 
           uv run release-dispatcher \
-            --event "${{ inputs.event }}" \
-            --duckdb-version "${{ inputs.duckdb_version }}" \
-            --duckdb-commit "${{ inputs.duckdb_commit }}" \
-            --status "${{ inputs.status }}" \
-            --client "${{ inputs.client }}" \
-            --message "${{ inputs.message }}" \
-            --source-workflow "${{ inputs.source_workflow }}" \
-            --source-run-id "${{ inputs.source_run_id }}"
+            --event "$DISPATCH_EVENT" \
+            --duckdb-version "$DISPATCH_DUCKDB_VERSION" \
+            --duckdb-commit "$DISPATCH_DUCKDB_COMMIT" \
+            --status "$DISPATCH_STATUS" \
+            --client "$DISPATCH_CLIENT" \
+            --message "$DISPATCH_MESSAGE" \
+            --source-workflow "$DISPATCH_SOURCE_WORKFLOW" \
+            --source-run-id "$DISPATCH_SOURCE_RUN_ID"

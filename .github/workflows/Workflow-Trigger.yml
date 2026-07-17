@@ -113,9 +113,11 @@ jobs:
         done < <(git -C "$repo_dir" for-each-ref --format='%(refname)' refs/remotes/origin)
 
         echo "Evaluated $candidates candidate branch(es); $changed changed branch(es)."
-        echo "changed_branches<<EOF" >> "$GITHUB_OUTPUT"
-        cat "$changed_file" >> "$GITHUB_OUTPUT"
-        echo "EOF" >> "$GITHUB_OUTPUT"
+        {
+          echo "changed_branches<<EOF"
+          cat "$changed_file"
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
 
     - name: Trigger DuckDB branch workflows (changed branches)
       if: ${{ fromJSON(steps.config.outputs.run_nightly) }}

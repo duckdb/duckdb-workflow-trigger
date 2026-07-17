@@ -56,7 +56,10 @@ def load_endpoints(path: Path) -> list[Endpoint]:
 
 
 def matching_endpoints(endpoints: list[Endpoint], state: ReleaseState) -> list[Endpoint]:
-    return [endpoint for endpoint in endpoints if endpoint.hook == state.event]
+    matches = [endpoint for endpoint in endpoints if endpoint.hook == state.event]
+    if state.event == "client_ready":
+        return [endpoint for endpoint in matches if endpoint.name == state.client]
+    return matches
 
 
 def registered_client_names(endpoints: list[Endpoint]) -> set[str]:
