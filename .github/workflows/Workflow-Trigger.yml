@@ -23,7 +23,7 @@ jobs:
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Config
       id: config
@@ -69,7 +69,7 @@ jobs:
 
     - name: Checkout DuckDB upstream repository
       if: ${{ fromJSON(steps.config.outputs.run_nightly) }}
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         repository: duckdb/duckdb
         fetch-depth: 0
