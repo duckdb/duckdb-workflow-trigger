@@ -5,7 +5,10 @@ import os
 import sys
 from pathlib import Path
 
+import requests
+
 from release_dispatcher.config import (
+    Endpoint,
     load_endpoints,
     matching_endpoints,
     registered_client_names,
@@ -18,6 +21,25 @@ from release_dispatcher.state import S3Settings, S3StateStore, StateAlreadyExist
 def env_value(name: str, default: str | None = None) -> str | None:
     value = os.getenv(name)
     return value if value else default
+
+
+def _github_annotation_escape(value: str) -> str:
+    return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+def _dispatch_failure_message(endpoint: Endpoint, exc: requests.RequestException) -> str:
+    return (
+        f"Failed to dispatch {endpoint.name} to "
+        f"{endpoint.owner}/{endpoint.repo}/{endpoint.workflow}@{endpoint.ref}: {exc}"
+    )
+
+
+def _report_dispatch_failure(endpoint: Endpoint, exc: requests.RequestException) -> None:
+    message = _dispatch_failure_message(endpoint, exc)
+    if os.getenv("GITHUB_ACTIONS"):
+        print(f"::error::{_github_annotation_escape(message)}", file=sys.stderr)
+        return
+    print(f"ERROR: {message}", file=sys.stderr)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -94,9 +116,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"No endpoints registered for hook {state.event}")
         return 0
 
+    failures = 0
     for endpoint in endpoints_to_dispatch:
-        request = dispatcher.dispatch(endpoint, state)
+        try:
+            request = dispatcher.dispatch(endpoint, state)
+        except requests.RequestException as exc:
+            failures += 1
+            _report_dispatch_failure(endpoint, exc)
+            continue
         print(f"Dispatched {endpoint.name} to {request.url}")
+
+    if failures:
+        print(f"ERROR: {failures} dispatch(es) failed", file=sys.stderr)
+        return 1
 
     return 0
 
