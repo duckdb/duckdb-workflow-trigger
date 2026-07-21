@@ -34,12 +34,8 @@ on:
         description: Optional debugging message, max 1000 characters
         required: false
         type: string
-      source_workflow:
-        description: Optional URL of the originating workflow
-        required: false
-        type: string
-      source_run_id:
-        description: Optional originating workflow run ID
+      source_run_url:
+        description: Optional URL of the originating workflow run
         required: false
         type: string
 
@@ -75,8 +71,7 @@ jobs:
           DISPATCH_STATUS: ${{ inputs.status }}
           DISPATCH_CLIENT: ${{ inputs.client }}
           DISPATCH_MESSAGE: ${{ inputs.message }}
-          DISPATCH_SOURCE_WORKFLOW: ${{ inputs.source_workflow }}
-          DISPATCH_SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          DISPATCH_SOURCE_RUN_URL: ${{ inputs.source_run_url }}
 
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
           RELEASE_STATE_BUCKET: ${{ vars.RELEASE_STATE_BUCKET }}
@@ -91,5 +86,4 @@ jobs:
             --status "$DISPATCH_STATUS" \
             --client "$DISPATCH_CLIENT" \
             --message "$DISPATCH_MESSAGE" \
-            --source-workflow "$DISPATCH_SOURCE_WORKFLOW" \
-            --source-run-id "$DISPATCH_SOURCE_RUN_ID"
+            --source-run-url "$DISPATCH_SOURCE_RUN_URL"

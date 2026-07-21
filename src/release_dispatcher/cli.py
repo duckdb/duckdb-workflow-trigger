@@ -50,8 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--status", required=True, choices=["success", "failure", "skipped"])
     parser.add_argument("--client")
     parser.add_argument("--message")
-    parser.add_argument("--source-workflow")
-    parser.add_argument("--source-run-id")
+    parser.add_argument("--source-run-url")
     parser.add_argument("--endpoint-config", default="endpoints.yml")
     parser.add_argument("--bucket", default=env_value("RELEASE_STATE_BUCKET", "duckdb-release-state"))
     parser.add_argument("--s3-endpoint-url", default=env_value("AWS_ENDPOINT_URL_S3"))
@@ -77,8 +76,7 @@ def main(argv: list[str] | None = None) -> int:
             status=args.status,
             client=args.client,
             message=args.message,
-            source_workflow=args.source_workflow,
-            source_run_id=args.source_run_id,
+            source_run_url=args.source_run_url,
         )
         endpoints = load_endpoints(Path(args.endpoint_config))
     except ValueError as exc:

@@ -21,8 +21,7 @@ class ReleaseState:
     status: ReleaseStatus
     client: str | None = None
     message: str | None = None
-    source_workflow: str | None = None
-    source_run_id: str | None = None
+    source_run_url: str | None = None
 
     @property
     def should_dispatch(self) -> bool:
@@ -56,10 +55,8 @@ class ReleaseState:
             result["client"] = self.client
         if self.message:
             result["message"] = self.message
-        if self.source_workflow:
-            result["source_workflow"] = self.source_workflow
-        if self.source_run_id:
-            result["source_run_id"] = self.source_run_id
+        if self.source_run_url:
+            result["source_run_url"] = self.source_run_url
         return result
 
 
@@ -71,8 +68,7 @@ def parse_release_state(
     status: str,
     client: str | None = None,
     message: str | None = None,
-    source_workflow: str | None = None,
-    source_run_id: str | None = None,
+    source_run_url: str | None = None,
 ) -> ReleaseState:
     normalized_event = event.strip()
     normalized_status = status.strip()
@@ -100,6 +96,5 @@ def parse_release_state(
         status=normalized_status,  # type: ignore[arg-type]
         client=normalized_client,
         message=message,
-        source_workflow=source_workflow or None,
-        source_run_id=source_run_id or None,
+        source_run_url=source_run_url or None,
     )
