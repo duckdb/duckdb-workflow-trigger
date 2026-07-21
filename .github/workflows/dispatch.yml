@@ -54,11 +54,6 @@ jobs:
       contents: read
       id-token: write
 
-    env:
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-      RELEASE_STATE_BUCKET: ${{ vars.RELEASE_STATE_BUCKET }}
-      AWS_REGION: ${{ vars.AWS_REGION }}
-
     steps:
       - uses: actions/checkout@v6
 
@@ -82,6 +77,10 @@ jobs:
           DISPATCH_MESSAGE: ${{ inputs.message }}
           DISPATCH_SOURCE_WORKFLOW: ${{ inputs.source_workflow }}
           DISPATCH_SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          RELEASE_STATE_BUCKET: ${{ vars.RELEASE_STATE_BUCKET }}
+          AWS_REGION: us-east-2
         run: |
           set -euo pipefail
 
