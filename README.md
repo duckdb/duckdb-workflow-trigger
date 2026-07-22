@@ -9,32 +9,52 @@ The release dispatcher accepts `core_ready` and `client_ready` workflow dispatch
 events, creates an immutable state file in S3, and dispatches successful events
 to registered downstream repository workflows.
 
-Downstream workflows receive:
+Downstream workflows receive the inputs configured for their endpoint. The
+default DuckDB release values available to endpoint templates are:
 
 - `duckdb_version`
 - `duckdb_commit`
 - `payload`, for example `{"phase":"core_ready"}` or
   `{"phase":"client_ready","name":"python"}`
+- `event`
+- `client`
+- `status`
+- `source_run_url`
 
 ### Configure endpoints
 
 Endpoints are configured in `endpoints.yml` and grouped by hook. `core_ready`
-contains a list of `owner/repo/workflow.yml@ref` targets. `client_ready` is
-grouped by client name, and each client contains a list of targets.
+contains a list of workflow endpoint mappings. `client_ready` is grouped by
+client name, and each client contains a list of workflow endpoint mappings.
+Each endpoint declares `workflow: owner/repo/workflow.yml@ref` and may declare
+`inputs`. Use a list to forward same-named release values, or a mapping for
+renamed inputs, static values, and Python format fields such as
+`{duckdb_commit}`.
 
 ```yaml
 hooks:
   core_ready:
-    - duckdb/duckdb-python/OnCoreReady.yml@main
+    - workflow: duckdb/duckdb-python/release.yml@main
+      inputs:
+        duckdb-sha: "{duckdb_commit}"
+        pypi-index: prod
   client_ready:
     python:
-      - duckdb/foo/OnClientReady.yml@main
-      - duckdb/bar/OnClientReady.yml@main
+      - workflow: duckdb/foo/OnClientReady.yml@main
+        inputs:
+          - duckdb_version
+          - duckdb_commit
+          - payload
+      - workflow: duckdb/bar/OnClientReady.yml@main
+        inputs:
+          duckdb-sha: "{duckdb_commit}"
 ```
 
 Use `core_ready` for workflows that should run after the DuckDB core release is
 ready. Use `client_ready` for workflows that should run after a specific client
 release is ready. A hook entry can dispatch to one or more downstream workflows.
+Configured `inputs` are sent exactly as defined, including hyphenated input
+names, so include every input the downstream workflow expects.
 
 To add a downstream workflow, register it under the appropriate hook in
 `endpoints.yml`. For `client_ready`, use the client name as the mapping key so

@@ -12,6 +12,11 @@ def test_build_workflow_dispatch_request_for_python_core_ready():
         owner="duckdb",
         repo="duckdb-python",
         workflow="OnCoreReady.yml",
+        inputs={
+            "duckdb-sha": "{duckdb_commit}",
+            "duckdb-version": "{duckdb_version}",
+            "pypi-index": "prod",
+        },
     )
     state = parse_release_state(
         event="core_ready",
@@ -27,9 +32,11 @@ def test_build_workflow_dispatch_request_for_python_core_ready():
         "/actions/workflows/OnCoreReady.yml/dispatches"
     )
     assert request.body["ref"] == "main"
-    assert request.body["inputs"]["duckdb_version"] == "v1.2.3"
-    assert request.body["inputs"]["duckdb_commit"] == "0123456789abcdef0123456789abcdef01234567"
-    assert json.loads(request.body["inputs"]["payload"]) == {"phase": "core_ready"}
+    assert request.body["inputs"] == {
+        "duckdb-sha": "0123456789abcdef0123456789abcdef01234567",
+        "duckdb-version": "v1.2.3",
+        "pypi-index": "prod",
+    }
 
 
 def test_build_workflow_dispatch_request_for_client_ready():
@@ -40,6 +47,10 @@ def test_build_workflow_dispatch_request_for_client_ready():
         repo="consumer",
         workflow="OnClientReady.yml",
         ref="stable",
+        inputs={
+            "duckdb-sha": "{duckdb_commit}",
+            "payload": "{payload}",
+        },
     )
     state = parse_release_state(
         event="client_ready",
@@ -56,3 +67,4 @@ def test_build_workflow_dispatch_request_for_client_ready():
         "phase": "client_ready",
         "name": "python",
     }
+    assert request.body["inputs"]["duckdb-sha"] == "0123456789abcdef0123456789abcdef01234567"
