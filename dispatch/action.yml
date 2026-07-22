@@ -1,0 +1,76 @@
+name: Record DuckDB release status
+description: Trigger the DuckDB release dispatcher workflow with release status metadata.
+
+inputs:
+  github_token:
+    description: GitHub token allowed to dispatch duckdb/duckdb-workflow-trigger workflows.
+    required: true
+  event:
+    description: Release event phase, for example core_ready or client_ready.
+    required: true
+  duckdb_version:
+    description: Full DuckDB version.
+    required: true
+  duckdb_commit:
+    description: Full DuckDB commit SHA.
+    required: true
+  status:
+    description: Event status, for example success, failure, or skipped.
+    required: true
+  client:
+    description: Client name for client_ready events.
+    required: false
+  source_run_url:
+    description: URL of the workflow run that produced this status.
+    required: false
+  message:
+    description: Human-readable status message.
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Dispatch release status
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        DISPATCH_EVENT: ${{ inputs.event }}
+        DISPATCH_DUCKDB_VERSION: ${{ inputs.duckdb_version }}
+        DISPATCH_DUCKDB_COMMIT: ${{ inputs.duckdb_commit }}
+        DISPATCH_STATUS: ${{ inputs.status }}
+        DISPATCH_CLIENT: ${{ inputs.client }}
+        DISPATCH_SOURCE_RUN_URL: ${{ inputs.source_run_url }}
+        DISPATCH_MESSAGE: ${{ inputs.message }}
+        DEFAULT_SOURCE_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        set -euo pipefail
+
+        source_run_url="${DISPATCH_SOURCE_RUN_URL:-$DEFAULT_SOURCE_RUN_URL}"
+        message="$DISPATCH_MESSAGE"
+        if [[ -z "$message" ]]; then
+          if [[ "$DISPATCH_EVENT" == "core_ready" ]]; then
+            message="DuckDB core ready"
+          elif [[ -n "$DISPATCH_CLIENT" ]]; then
+            message="DuckDB ${DISPATCH_CLIENT} client ready"
+          else
+            message="DuckDB release state recorded"
+          fi
+        fi
+
+        args=(
+          workflow run dispatch.yml
+          --repo duckdb/duckdb-workflow-trigger
+          --ref main
+          --field "event=$DISPATCH_EVENT"
+          --field "duckdb_version=$DISPATCH_DUCKDB_VERSION"
+          --field "duckdb_commit=$DISPATCH_DUCKDB_COMMIT"
+          --field "status=$DISPATCH_STATUS"
+          --field "source_run_url=$source_run_url"
+          --field "message=$message"
+        )
+
+        if [[ -n "$DISPATCH_CLIENT" ]]; then
+          args+=(--field "client=$DISPATCH_CLIENT")
+        fi
+
+        gh "${args[@]}"
