@@ -38,11 +38,7 @@ class GitHubDispatcher:
         )
         body = {
             "ref": endpoint.ref,
-            "inputs": {
-                "duckdb_version": state.duckdb_version,
-                "duckdb_commit": state.duckdb_commit,
-                "payload": json.dumps(state.outbound_payload, sort_keys=True),
-            },
+            "inputs": endpoint.render_inputs(state),
         }
         return DispatchRequest(endpoint=endpoint, url=url, body=body)
 

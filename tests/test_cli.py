@@ -42,7 +42,9 @@ def write_config(path: Path):
         """
 hooks:
   core_ready:
-    - duckdb/duckdb-python/OnCoreReady.yml@main
+    - workflow: duckdb/duckdb-python/OnCoreReady.yml@main
+      inputs:
+        duckdb-sha: "{duckdb_commit}"
 """,
         encoding="utf-8",
     )
@@ -53,8 +55,12 @@ def write_multi_endpoint_config(path: Path):
         """
 hooks:
   core_ready:
-    - duckdb/missing-workflow/OnCoreReady.yml@main
-    - duckdb/duckdb-python/OnCoreReady.yml@main
+    - workflow: duckdb/missing-workflow/OnCoreReady.yml@main
+      inputs:
+        duckdb-sha: "{duckdb_commit}"
+    - workflow: duckdb/duckdb-python/OnCoreReady.yml@main
+      inputs:
+        duckdb-sha: "{duckdb_commit}"
 """,
         encoding="utf-8",
     )
