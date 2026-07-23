@@ -5,6 +5,7 @@ hooks:
     - workflow: duckdb/duckdb-python/release.yml@main
       inputs:
         duckdb-sha: "{duckdb_commit}"
+        duckdb-version: "{duckdb_version}"
         pypi-index: prod
     - workflow: duckdb/duckdb-java/Vendor.yml@main
       inputs:
