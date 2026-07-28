@@ -9,6 +9,10 @@ on:
       trigger-nightly:
         required: true
         type: boolean
+      skip_tests:
+        required: false
+        type: boolean
+        default: false
   schedule:
     - cron: "17 0 * * *"
     - cron: "30 9 * * 1-5"
@@ -123,6 +127,7 @@ jobs:
       if: ${{ fromJSON(steps.config.outputs.run_nightly) }}
       env:
         CHANGED_BRANCHES: ${{ steps.changed-branches.outputs.changed_branches }}
+        SKIP_TESTS: ${{ github.event.inputs.skip_tests || 'false' }}
       run: |
         set -euo pipefail
 
@@ -137,7 +142,7 @@ jobs:
           [[ -z "$branch" ]] && continue
           echo "Dispatching branch-scoped workflows for $branch"
           ./trigger.sh duckdb "$(printf '{"ref":"refs/heads/%s"}' "$branch")" NightlyTests.yml
-          ./trigger.sh duckdb "$(printf '{"ref":"refs/heads/%s"}' "$branch")" Main.yml
+          ./trigger.sh duckdb "$(printf '{"ref":"refs/heads/%s","inputs":{"skip_tests":"%s"}}' "$branch" "$SKIP_TESTS")" Main.yml
           if [[ "$branch" =~ ^v1\.[0-5]- ]]; then
             echo "Dispatching InvokeCI.yml for release branch family v1.0-*..v1.5-: $branch"
             ./trigger.sh duckdb "$(printf '{"ref":"refs/heads/%s","inputs":{"skip_tests":"false","git_ref":"%s","run_all":"true","twine_upload":"true"}}' "$branch" "$branch")" InvokeCI.yml
