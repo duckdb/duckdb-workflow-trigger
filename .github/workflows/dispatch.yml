@@ -73,9 +73,7 @@ jobs:
           DISPATCH_MESSAGE: ${{ inputs.message }}
           DISPATCH_SOURCE_RUN_URL: ${{ inputs.source_run_url }}
 
-          PAT_USER: duckdblabs-bot
-          PAT_TOKEN: ${{ secrets.DUCKDB_RELEASE_DISPATCH_TOKEN }}
-
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
           RELEASE_STATE_BUCKET: ${{ vars.RELEASE_STATE_BUCKET }}
           AWS_REGION: us-east-2
         run: |
