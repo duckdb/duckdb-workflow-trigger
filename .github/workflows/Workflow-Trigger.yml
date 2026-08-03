@@ -23,8 +23,8 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      PAT_USER: duckdblabs-bot
-      PAT_TOKEN: ${{ secrets.DUCKDB_RELEASE_DISPATCH_TOKEN }}
+      PAT_USER: ${{ secrets.PAT_USER }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
 
     steps:
     - uses: actions/checkout@v6
