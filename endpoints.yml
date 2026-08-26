@@ -15,7 +15,7 @@ hooks:
       inputs:
         duckdb-sha: "{duckdb_commit}"
         duckdb-version: "{duckdb_version}"
-    - workflow: duckdblabs/duckdb-internal/Benchmark.yml@main
+    - workflow: duckdblabs/duckdb-benchmark/Benchmark.yml@main
       inputs:
         duckdb-sha: "{duckdb_commit}"
         duckdb-version: "{duckdb_version}"
