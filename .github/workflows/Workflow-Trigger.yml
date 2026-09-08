@@ -68,7 +68,7 @@ jobs:
       run: |
         set -euo pipefail
 
-        branch="main"
+        branch="v2.0-cyanoptera"
         ./trigger.sh duckdb "$(printf '{"ref":"refs/heads/%s","inputs":{"skip_tests":"true"}}' "$branch")" Main.yml
 
     - name: Checkout DuckDB upstream repository
