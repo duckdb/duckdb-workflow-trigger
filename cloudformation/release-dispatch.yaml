@@ -1,0 +1,151 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  S3 release-state storage and the GitHub Actions IAM role used by the DuckDB
+  release dispatcher.
+
+Parameters:
+  ReleaseStateBucketName:
+    Type: String
+    Description: >-
+      Globally unique S3 bucket name for release state. Use a new name when
+      migrating while the previous account still owns its bucket name.
+    AllowedPattern: "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"
+    ConstraintDescription: Must be a valid, globally unique S3 bucket name.
+
+  ReleaseDispatchRoleName:
+    Type: String
+    Default: duckdb-release-dispatch
+    Description: Name of the IAM role assumed by the GitHub Actions workflow.
+    AllowedPattern: "^[A-Za-z0-9+=,.@_-]{1,64}$"
+
+  GitHubOrganization:
+    Type: String
+    Default: duckdb
+    Description: GitHub organization allowed to assume the role.
+    AllowedPattern: "^[A-Za-z0-9_.-]+$"
+
+  GitHubRepository:
+    Type: String
+    Default: duckdb-workflow-trigger
+    Description: GitHub repository allowed to assume the role.
+    AllowedPattern: "^[A-Za-z0-9_.-]+$"
+
+  GitHubBranch:
+    Type: String
+    Default: main
+    Description: Git branch allowed to assume the role.
+    AllowedPattern: "^[^ ]+$"
+
+  CreateGitHubOidcProvider:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: >-
+      Set to false when this AWS account already has the
+      token.actions.githubusercontent.com IAM OIDC provider.
+
+Conditions:
+  ShouldCreateGitHubOidcProvider: !Equals
+    - !Ref CreateGitHubOidcProvider
+    - "true"
+
+Resources:
+  ReleaseStateBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref ReleaseStateBucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Application
+          Value: duckdb-release-dispatch
+
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: ShouldCreateGitHubOidcProvider
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      Tags:
+        - Key: Application
+          Value: duckdb-release-dispatch
+
+  ReleaseDispatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref ReleaseDispatchRoleName
+      Description: GitHub Actions role for the DuckDB release dispatcher.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - ShouldCreateGitHubOidcProvider
+                - !Ref GitHubOidcProvider
+                - !Sub >-
+                    arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub >-
+                  repo:${GitHubOrganization}/${GitHubRepository}:ref:refs/heads/${GitHubBranch}
+      Policies:
+        - PolicyName: duckdb-release-state-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt ReleaseStateBucket.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:AbortMultipartUpload
+                Resource: !Sub "${ReleaseStateBucket.Arn}/*"
+      Tags:
+        - Key: Application
+          Value: duckdb-release-dispatch
+
+Outputs:
+  AwsRoleArn:
+    Description: Value for the GitHub repository variable AWS_ROLE_ARN.
+    Value: !GetAtt ReleaseDispatchRole.Arn
+
+  AwsRegion:
+    Description: Value for the GitHub repository variable AWS_REGION.
+    Value: !Ref AWS::Region
+
+  ReleaseStateBucket:
+    Description: Value for the GitHub repository variable RELEASE_STATE_BUCKET.
+    Value: !Ref ReleaseStateBucket
+
+  GitHubOidcProviderArn:
+    Description: IAM OIDC provider used by the role trust policy.
+    Value: !If
+      - ShouldCreateGitHubOidcProvider
+      - !Ref GitHubOidcProvider
+      - !Sub >-
+          arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
