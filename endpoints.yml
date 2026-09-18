@@ -19,6 +19,10 @@ hooks:
       inputs:
         duckdb-sha: "{duckdb_commit}"
         duckdb-version: "{duckdb_version}"
+    - workflow: duckdb/duckdb-rs/release_version_pr.yml@main
+      inputs:
+        duckdb-sha: "{duckdb_commit}"
+        duckdb-version: "{duckdb_version}"
 
   # Trigger client-specific workflows after a client release is ready.
   client_ready:
