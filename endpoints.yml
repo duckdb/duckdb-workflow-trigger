@@ -39,6 +39,9 @@ hooks:
     benchmark:
       "2":
         - workflow: duckdblabs/duckdb-benchmark/Benchmark.yml@main
+    duckdb-rs:
+      "2":
+        - workflow: duckdb/duckdb-rs/release_version_pr.yml@main
 
   # Trigger client-specific workflows after a client release is ready.
   # Group endpoints by client name so the payload matches the downstream release.
