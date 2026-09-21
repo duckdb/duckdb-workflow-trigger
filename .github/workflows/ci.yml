@@ -20,6 +20,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
+      - name: Lint CloudFormation
+        run: uvx --from cfn-lint cfn-lint cloudformation/release-dispatch.yaml
+
       - name: Start MinIO
         run: make up
 
