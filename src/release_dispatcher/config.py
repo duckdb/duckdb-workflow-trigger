@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from string import Formatter
@@ -7,6 +8,13 @@ from string import Formatter
 import yaml
 
 from release_dispatcher.models import ReleaseState
+
+
+RELEASE_LINE_PATTERN = re.compile(r"^(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?$")
+DUCKDB_VERSION_PATTERN = re.compile(
+    r"^v?(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)(?:[.\-+].+)?$"
+)
+_INPUTS_UNSET = object()
 
 
 @dataclass(frozen=True)
@@ -18,6 +26,24 @@ class Endpoint:
     workflow: str
     ref: str = "main"
     inputs: dict[str, str] | None = None
+    release_line: str | None = None
+
+    @property
+    def target(self) -> str:
+        return f"{self.owner}/{self.repo}/{self.workflow}@{self.ref}"
+
+    @property
+    def qualified_name(self) -> str:
+        if self.name == self.hook:
+            return self.hook
+        return f"{self.hook}.{self.name}"
+
+    def dispatch_description(self, state: ReleaseState) -> str:
+        release_line = f" (release line {self.release_line})" if self.release_line else ""
+        return (
+            f"{self.qualified_name} for DuckDB {state.duckdb_version}{release_line} "
+            f"to {self.target}"
+        )
 
     def render_inputs(self, state: ReleaseState) -> dict[str, str]:
         if self.inputs is None:
@@ -37,23 +63,33 @@ def load_endpoints(path: Path) -> list[Endpoint]:
     hooks = data.get("hooks")
     if not isinstance(hooks, dict):
         raise ValueError("endpoint config must contain a hooks mapping")
+    default_inputs = _parse_default_inputs(data.get("defaults"))
 
     endpoints: list[Endpoint] = []
     for hook, hook_endpoints in hooks.items():
         hook_name = _non_empty_string(hook, "hook name")
         if isinstance(hook_endpoints, list):
-            endpoints.extend(_endpoints_for_targets(hook_name, hook_name, hook_endpoints, hook_name))
+            endpoints.extend(
+                _endpoints_for_targets(
+                    hook_name,
+                    hook_name,
+                    hook_endpoints,
+                    hook_name,
+                    default_inputs=default_inputs,
+                )
+            )
             continue
         if not isinstance(hook_endpoints, dict):
             raise ValueError(f"hook {hook_name} must contain a workflow list or endpoint mapping")
         for name, workflow_targets in hook_endpoints.items():
             endpoint_name = _non_empty_string(name, f"endpoint name for hook {hook_name}")
             endpoints.extend(
-                _endpoints_for_targets(
+                _endpoints_for_group(
                     endpoint_name,
                     hook_name,
                     workflow_targets,
                     f"{hook_name}.{endpoint_name}",
+                    default_inputs=default_inputs,
                 )
             )
     return endpoints
@@ -62,8 +98,29 @@ def load_endpoints(path: Path) -> list[Endpoint]:
 def matching_endpoints(endpoints: list[Endpoint], state: ReleaseState) -> list[Endpoint]:
     matches = [endpoint for endpoint in endpoints if endpoint.hook == state.event]
     if state.event == "client_ready":
-        return [endpoint for endpoint in matches if endpoint.name == state.client]
-    return matches
+        matches = [endpoint for endpoint in matches if endpoint.name == state.client]
+
+    grouped: dict[str, list[Endpoint]] = {}
+    for endpoint in matches:
+        grouped.setdefault(endpoint.name, []).append(endpoint)
+
+    selected: list[Endpoint] = []
+    for name, group in grouped.items():
+        unversioned = [endpoint for endpoint in group if endpoint.release_line is None]
+        if unversioned:
+            selected.extend(unversioned)
+            continue
+
+        release_lines = {endpoint.release_line for endpoint in group if endpoint.release_line}
+        release_line = _select_release_line(state.duckdb_version, release_lines)
+        if release_line is None:
+            available = ", ".join(sorted(release_lines, key=_release_line_sort_key))
+            raise ValueError(
+                f"no release line for DuckDB {state.duckdb_version} in endpoint "
+                f"{state.event}.{name}; configured release lines: {available}"
+            )
+        selected.extend(endpoint for endpoint in group if endpoint.release_line == release_line)
+    return selected
 
 
 def registered_client_names(endpoints: list[Endpoint]) -> set[str]:
@@ -74,7 +131,62 @@ def registered_client_names(endpoints: list[Endpoint]) -> set[str]:
     }
 
 
-def _endpoints_for_targets(name: str, hook: str, workflow_targets: object, context: str) -> list[Endpoint]:
+def _endpoints_for_group(
+    name: str,
+    hook: str,
+    workflow_targets: object,
+    context: str,
+    *,
+    default_inputs: dict[str, str] | None,
+) -> list[Endpoint]:
+    if isinstance(workflow_targets, list):
+        return _endpoints_for_targets(
+            name,
+            hook,
+            workflow_targets,
+            context,
+            default_inputs=default_inputs,
+        )
+    if not isinstance(workflow_targets, dict):
+        raise ValueError(
+            f"endpoint {context} must be a workflow list or release-line mapping"
+        )
+
+    endpoints: list[Endpoint] = []
+    for release_line_value, release_targets in workflow_targets.items():
+        if not isinstance(release_line_value, str):
+            raise ValueError(
+                f"release line for endpoint {context} must be a quoted string"
+            )
+        release_line = release_line_value.strip()
+        if not RELEASE_LINE_PATTERN.fullmatch(release_line):
+            raise ValueError(
+                f"endpoint {context} must be a workflow list or release-line mapping; "
+                f"release line {release_line_value!r} must be a quoted major or "
+                "major.minor version"
+            )
+        endpoints.extend(
+            _endpoints_for_targets(
+                name,
+                hook,
+                release_targets,
+                f"{context}.{release_line}",
+                release_line=release_line,
+                default_inputs=default_inputs,
+            )
+        )
+    return endpoints
+
+
+def _endpoints_for_targets(
+    name: str,
+    hook: str,
+    workflow_targets: object,
+    context: str,
+    *,
+    release_line: str | None = None,
+    default_inputs: dict[str, str] | None,
+) -> list[Endpoint]:
     if not isinstance(workflow_targets, list):
         raise ValueError(f"endpoint {context} must be a workflow list")
 
@@ -88,6 +200,11 @@ def _endpoints_for_targets(name: str, hook: str, workflow_targets: object, conte
             _non_empty_string(endpoint_config.get("workflow"), f"workflow for {endpoint_context}"),
             endpoint_context,
         )
+        configured_inputs = endpoint_config.get("inputs", _INPUTS_UNSET)
+        if configured_inputs is _INPUTS_UNSET:
+            inputs = dict(default_inputs) if default_inputs is not None else None
+        else:
+            inputs = _parse_inputs(configured_inputs, endpoint_context)
         endpoints.append(
             Endpoint(
                 name=name,
@@ -96,10 +213,40 @@ def _endpoints_for_targets(name: str, hook: str, workflow_targets: object, conte
                 repo=repo,
                 workflow=workflow,
                 ref=ref,
-                inputs=_parse_inputs(endpoint_config.get("inputs"), endpoint_context),
+                inputs=inputs,
+                release_line=release_line,
             )
         )
     return endpoints
+
+
+def _parse_default_inputs(defaults: object) -> dict[str, str] | None:
+    if defaults is None:
+        return None
+    if not isinstance(defaults, dict):
+        raise ValueError("endpoint config defaults must be a mapping")
+    return _parse_inputs(defaults.get("inputs"), "defaults")
+
+
+def _select_release_line(duckdb_version: str, release_lines: set[str]) -> str | None:
+    match = DUCKDB_VERSION_PATTERN.fullmatch(duckdb_version.strip())
+    if not match:
+        raise ValueError(
+            f"DuckDB version {duckdb_version!r} must contain a numeric major.minor version"
+        )
+
+    major = match.group("major")
+    exact = f"{major}.{match.group('minor')}"
+    if exact in release_lines:
+        return exact
+    if major in release_lines:
+        return major
+    return None
+
+
+def _release_line_sort_key(release_line: str) -> tuple[int, int]:
+    major, separator, minor = release_line.partition(".")
+    return int(major), int(minor) if separator else -1
 
 
 def _parse_inputs(inputs: object, context: str) -> dict[str, str] | None:

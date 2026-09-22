@@ -35,6 +35,110 @@ hooks:
     }
 
 
+def test_load_endpoints_applies_yaml_default_inputs_to_all_hooks(tmp_path: Path):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        """
+defaults:
+  inputs:
+    duckdb-sha: "{duckdb_commit}"
+    duckdb-version: "{duckdb_version}"
+hooks:
+  core_ready:
+    - workflow: duckdb/core-consumer/OnCoreReady.yml@main
+  client_ready:
+    r:
+      - workflow: duckdb/client-consumer/OnClientReady.yml@main
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = load_endpoints(config)
+
+    assert [endpoint.inputs for endpoint in endpoints] == [
+        {
+            "duckdb-sha": "{duckdb_commit}",
+            "duckdb-version": "{duckdb_version}",
+        },
+        {
+            "duckdb-sha": "{duckdb_commit}",
+            "duckdb-version": "{duckdb_version}",
+        },
+    ]
+    assert endpoints[0].inputs is not endpoints[1].inputs
+
+
+def test_explicit_inputs_replace_yaml_defaults(tmp_path: Path):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        """
+defaults:
+  inputs:
+    duckdb-sha: "{duckdb_commit}"
+    duckdb-version: "{duckdb_version}"
+hooks:
+  core_ready:
+    - workflow: duckdb/mapping/OnCoreReady.yml@main
+      inputs:
+        pypi-index: prod
+    - workflow: duckdb/list/OnCoreReady.yml@main
+      inputs:
+        - duckdb_commit
+    - workflow: duckdb/null/OnCoreReady.yml@main
+      inputs: null
+    - workflow: duckdb/empty/OnCoreReady.yml@main
+      inputs: []
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = {endpoint.repo: endpoint for endpoint in load_endpoints(config)}
+
+    assert endpoints["mapping"].inputs == {"pypi-index": "prod"}
+    assert endpoints["list"].inputs == {"duckdb_commit": "{duckdb_commit}"}
+    assert endpoints["null"].inputs is None
+    assert endpoints["empty"].inputs == {}
+
+
+def test_omitted_inputs_remain_empty_without_yaml_defaults(tmp_path: Path):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        """
+hooks:
+  core_ready:
+    - workflow: duckdb/duckdb-python/OnCoreReady.yml@main
+""",
+        encoding="utf-8",
+    )
+
+    assert load_endpoints(config)[0].inputs is None
+
+
+@pytest.mark.parametrize(
+    ("defaults", "error"),
+    [
+        ("defaults: invalid", "defaults must be a mapping"),
+        ("defaults:\n  inputs: invalid", "inputs must be a mapping or list"),
+    ],
+)
+def test_load_endpoints_rejects_invalid_yaml_defaults(
+    tmp_path: Path, defaults: str, error: str
+):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        f"""
+{defaults}
+hooks:
+  core_ready:
+    - workflow: duckdb/duckdb-python/OnCoreReady.yml@main
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=error):
+        load_endpoints(config)
+
+
 def test_matching_endpoints_filters_by_hook(tmp_path: Path):
     config = tmp_path / "endpoints.yml"
     config.write_text(
@@ -89,6 +193,151 @@ hooks:
         ("foo", "OnClientReady.yml", "main"),
         ("bar", "OnClientReady.yml", "stable"),
     ]
+
+
+def test_matching_endpoints_prefers_exact_release_line_then_major_fallback(tmp_path: Path):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        """
+hooks:
+  core_ready:
+    python:
+      "2.0":
+        - workflow: duckdb/duckdb-python/release.yml@v2.0-cyanoptera
+          inputs:
+            duckdb-version: "{duckdb_version}"
+      "2":
+        - workflow: duckdb/duckdb-python/release.yml@main
+          inputs:
+            duckdb-version: "{duckdb_version}"
+    java:
+      "2":
+        - workflow: duckdb/duckdb-java/Vendor.yml@main
+""",
+        encoding="utf-8",
+    )
+    endpoints = load_endpoints(config)
+
+    exact_state = parse_release_state(
+        event="core_ready",
+        duckdb_version="v2.0.7",
+        duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+        status="success",
+    )
+    fallback_state = parse_release_state(
+        event="core_ready",
+        duckdb_version="2.1.0-dev12",
+        duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+        status="success",
+    )
+
+    exact = matching_endpoints(endpoints, exact_state)
+    fallback = matching_endpoints(endpoints, fallback_state)
+
+    assert [(endpoint.name, endpoint.ref, endpoint.release_line) for endpoint in exact] == [
+        ("python", "v2.0-cyanoptera", "2.0"),
+        ("java", "main", "2"),
+    ]
+    assert [(endpoint.name, endpoint.ref, endpoint.release_line) for endpoint in fallback] == [
+        ("python", "main", "2"),
+        ("java", "main", "2"),
+    ]
+    assert fallback[0].render_inputs(fallback_state)["duckdb-version"] == "2.1.0-dev12"
+
+
+def test_matching_endpoints_selects_release_line_for_requested_client(tmp_path: Path):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        """
+hooks:
+  client_ready:
+    python:
+      "2.0":
+        - workflow: duckdb/duckdb-python/OnClientReady.yml@v2.0-cyanoptera
+      "2":
+        - workflow: duckdb/duckdb-python/OnClientReady.yml@main
+    r:
+      "2":
+        - workflow: duckdb/duckdb-r/OnClientReady.yml@main
+""",
+        encoding="utf-8",
+    )
+    state = parse_release_state(
+        event="client_ready",
+        duckdb_version="v2.0.1",
+        duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+        status="success",
+        client="python",
+    )
+
+    endpoints = matching_endpoints(load_endpoints(config), state)
+
+    assert [(endpoint.name, endpoint.ref, endpoint.release_line) for endpoint in endpoints] == [
+        ("python", "v2.0-cyanoptera", "2.0")
+    ]
+
+
+def test_matching_endpoints_rejects_unconfigured_release_line(tmp_path: Path):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        """
+hooks:
+  core_ready:
+    python:
+      "2":
+        - workflow: duckdb/duckdb-python/release.yml@main
+""",
+        encoding="utf-8",
+    )
+    state = parse_release_state(
+        event="core_ready",
+        duckdb_version="v3.0.0",
+        duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+        status="success",
+    )
+
+    with pytest.raises(ValueError, match=r"no release line.*core_ready\.python"):
+        matching_endpoints(load_endpoints(config), state)
+
+
+def test_matching_endpoints_rejects_malformed_duckdb_version(tmp_path: Path):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        """
+hooks:
+  core_ready:
+    python:
+      "2":
+        - workflow: duckdb/duckdb-python/release.yml@main
+""",
+        encoding="utf-8",
+    )
+    state = parse_release_state(
+        event="core_ready",
+        duckdb_version="cyanoptera",
+        duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+        status="success",
+    )
+
+    with pytest.raises(ValueError, match="must contain a numeric major.minor version"):
+        matching_endpoints(load_endpoints(config), state)
+
+
+def test_load_endpoints_requires_quoted_release_line_keys(tmp_path: Path):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        """
+hooks:
+  core_ready:
+    python:
+      2.0:
+        - workflow: duckdb/duckdb-python/release.yml@main
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="must be a quoted string"):
+        load_endpoints(config)
 
 
 def test_load_endpoints_rejects_wrapped_workflows_key(tmp_path: Path):

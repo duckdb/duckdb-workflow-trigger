@@ -68,3 +68,28 @@ def test_build_workflow_dispatch_request_for_client_ready():
         "name": "python",
     }
     assert request.body["inputs"]["duckdb-sha"] == "0123456789abcdef0123456789abcdef01234567"
+
+
+def test_dry_run_logs_exact_workflow_ref_and_release_line(capsys):
+    endpoint = Endpoint(
+        name="python",
+        hook="core_ready",
+        owner="duckdb",
+        repo="duckdb-python",
+        workflow="release.yml",
+        ref="v2.0-cyanoptera",
+        release_line="2.0",
+    )
+    state = parse_release_state(
+        event="core_ready",
+        duckdb_version="v2.0.7",
+        duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+        status="success",
+    )
+
+    GitHubDispatcher(token="fake", dry_run=True).dispatch(endpoint, state)
+
+    assert (
+        "DRY RUN: would dispatch core_ready.python for DuckDB v2.0.7 "
+        "(release line 2.0) to duckdb/duckdb-python/release.yml@v2.0-cyanoptera"
+    ) in capsys.readouterr().out
