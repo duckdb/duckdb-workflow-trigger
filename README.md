@@ -28,38 +28,67 @@ Endpoints are configured in `endpoints.yml` and grouped by hook.
 ```yaml
 hooks:
   # Dispatch after DuckDB core release artifacts are ready.
-  # A hook entry can dispatch to one or more downstream workflows.
+  # Group endpoints by downstream integration, then by DuckDB release line.
   core_ready:
-    # workflow is owner/repo/workflow.yml@ref. The receiver workflow runs on ref.
-    - workflow: duckdb/duckdb-python/release.yml@main
-      # inputs are sent exactly as named here to the receiver workflow.
-      # Mapping form supports receiver-specific input names, static values,
-      # and Python format fields such as {duckdb_commit}.
-      inputs:
-        duckdb-sha: "{duckdb_commit}"
-        pypi-index: prod
+    python:
+      # An exact major.minor release line takes precedence over the major fallback.
+      "2.0":
+        # workflow is owner/repo/workflow.yml@ref. The receiver runs at this ref.
+        - workflow: duckdb/duckdb-python/release.yml@v2.0-cyanoptera
+          # Mapping form supports receiver-specific input names, static values,
+          # and template values such as {duckdb_commit}.
+          inputs:
+            duckdb-sha: "{duckdb_commit}"
+            duckdb-version: "{duckdb_version}"
+            pypi-index: prod
+      # A major release line matches other releases in that major version.
+      "2":
+        - workflow: duckdb/duckdb-python/release.yml@main
+          inputs:
+            duckdb-sha: "{duckdb_commit}"
+            duckdb-version: "{duckdb_version}"
+            pypi-index: prod
+
+    java:
+      "2":
+        - workflow: duckdb/duckdb-java/Vendor.yml@main
+          inputs:
+            duckdb-sha: "{duckdb_commit}"
 
   # Dispatch after a specific client release is ready.
-  # Group client_ready endpoints by client name so the receiver payload matches
-  # the downstream release.
+  # Group endpoints by client name so the payload matches the downstream release.
   client_ready:
-    python:
-      - workflow: duckdb/foo/OnClientReady.yml@main
-        # List form forwards same-named release values to the receiver workflow.
-        # Available values include duckdb_version, duckdb_commit, payload, event,
-        # client, status, and source_run_url.
-        inputs:
-          - duckdb_version
-          - duckdb_commit
-          - payload
-      - workflow: duckdb/bar/OnClientReady.yml@main
-        inputs:
-          duckdb-sha: "{duckdb_commit}"
+    r:
+      "2":
+        - workflow: duckdb/duckdb-r/OnClientReady.yml@main
+          # List form forwards same-named release values to the receiver workflow.
+          inputs:
+            - duckdb_version
+            - duckdb_commit
+            - payload
 ```
 
-To add a downstream workflow, register it under the appropriate hook in
-`endpoints.yml`. For `client_ready`, use the client name as the mapping key so
-the outbound payload stays aligned with the downstream release.
+Each downstream name contains its release-line routes. An exact `major.minor`
+route wins over the `major` fallback, so `v2.0.7` uses `"2.0"` while `v2.1.0`
+uses `"2"`. A major route matches only that major version. Release-line keys
+must be quoted so YAML treats them as strings. If a successful event has no
+route for an applicable downstream, dispatch fails before its immutable state
+is written.
+
+`workflow` uses `owner/repo/workflow.yml@ref`; the receiver workflow runs at
+that ref. Mapping-form inputs support receiver-specific names, static values,
+and format fields such as `{duckdb_commit}`. List-form inputs forward the
+same-named release values. The original full DuckDB version is used for input
+rendering even though routing only considers its major and minor components.
+
+The legacy unversioned workflow-list forms remain supported. For
+`client_ready`, the downstream name must still match the event's client name.
+Dispatch logs include the selected release line and the complete workflow
+target, for example:
+
+```text
+Dispatched core_ready.python for DuckDB v2.0.7 (release line 2.0) to duckdb/duckdb-python/release.yml@v2.0-cyanoptera
+```
 
 ## Development
 
@@ -86,7 +115,7 @@ set +a
 
 uv run release-dispatcher \
   --event core_ready \
-  --duckdb-version v1.2.3 \
+  --duckdb-version v2.1.0 \
   --duckdb-commit 0123456789abcdef0123456789abcdef01234567 \
   --status success
 ```

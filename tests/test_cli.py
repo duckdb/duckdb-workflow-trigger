@@ -66,6 +66,25 @@ hooks:
     )
 
 
+def write_versioned_config(path: Path):
+    path.write_text(
+        """
+hooks:
+  core_ready:
+    python:
+      "2.0":
+        - workflow: duckdb/duckdb-python/release.yml@v2.0-cyanoptera
+          inputs:
+            duckdb-version: "{duckdb_version}"
+      "2":
+        - workflow: duckdb/duckdb-python/release.yml@main
+          inputs:
+            duckdb-version: "{duckdb_version}"
+""",
+        encoding="utf-8",
+    )
+
+
 def test_cli_stores_failure_without_dispatch(tmp_path, monkeypatch, capsys):
     config = tmp_path / "endpoints.yml"
     write_config(config)
@@ -137,6 +156,81 @@ def test_cli_warns_for_unknown_client_but_stores(tmp_path, monkeypatch, capsys):
     assert "WARNING: client 'r' is not registered" in captured.err
 
 
+def test_cli_rejects_unconfigured_release_line_before_writing_state(
+    tmp_path, monkeypatch, capsys
+):
+    config = tmp_path / "endpoints.yml"
+    write_versioned_config(config)
+    FakeStore.created = []
+    FakeDispatcher.attempted = []
+    FakeDispatcher.dispatched = []
+    FakeDispatcher.failing_repos = set()
+    monkeypatch.setattr(cli, "S3StateStore", FakeStore)
+    monkeypatch.setattr(cli, "GitHubDispatcher", FakeDispatcher)
+
+    result = cli.main(
+        [
+            "--event",
+            "core_ready",
+            "--duckdb-version",
+            "v3.0.0",
+            "--duckdb-commit",
+            "0123456789abcdef0123456789abcdef01234567",
+            "--status",
+            "success",
+            "--endpoint-config",
+            str(config),
+            "--bucket",
+            "duckdb-release-state",
+            "--dry-run-github",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert FakeStore.created == []
+    assert FakeDispatcher.attempted == []
+    assert "no release line for DuckDB v3.0.0 in endpoint core_ready.python" in captured.err
+
+
+def test_cli_logs_selected_workflow_and_release_line(tmp_path, monkeypatch, capsys):
+    config = tmp_path / "endpoints.yml"
+    write_versioned_config(config)
+    FakeStore.created = []
+    FakeDispatcher.attempted = []
+    FakeDispatcher.dispatched = []
+    FakeDispatcher.failing_repos = set()
+    monkeypatch.delenv("DRY_RUN_GITHUB", raising=False)
+    monkeypatch.setattr(cli, "S3StateStore", FakeStore)
+    monkeypatch.setattr(cli, "GitHubDispatcher", FakeDispatcher)
+
+    result = cli.main(
+        [
+            "--event",
+            "core_ready",
+            "--duckdb-version",
+            "v2.0.7",
+            "--duckdb-commit",
+            "0123456789abcdef0123456789abcdef01234567",
+            "--status",
+            "success",
+            "--endpoint-config",
+            str(config),
+            "--bucket",
+            "duckdb-release-state",
+            "--github-token",
+            "fake",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert (
+        "Dispatched core_ready.python for DuckDB v2.0.7 (release line 2.0) to "
+        "duckdb/duckdb-python/release.yml@v2.0-cyanoptera"
+    ) in captured.out
+
+
 def test_cli_continues_dispatching_after_endpoint_failure(tmp_path, monkeypatch, capsys):
     config = tmp_path / "endpoints.yml"
     write_multi_endpoint_config(config)
@@ -145,6 +239,7 @@ def test_cli_continues_dispatching_after_endpoint_failure(tmp_path, monkeypatch,
     FakeDispatcher.dispatched = []
     FakeDispatcher.failing_repos = {"missing-workflow"}
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("DRY_RUN_GITHUB", raising=False)
     monkeypatch.setattr(cli, "S3StateStore", FakeStore)
     monkeypatch.setattr(cli, "GitHubDispatcher", FakeDispatcher)
 
@@ -162,7 +257,8 @@ def test_cli_continues_dispatching_after_endpoint_failure(tmp_path, monkeypatch,
             str(config),
             "--bucket",
             "duckdb-release-state",
-            "--dry-run-github",
+            "--github-token",
+            "fake",
         ]
     )
 
@@ -176,9 +272,12 @@ def test_cli_continues_dispatching_after_endpoint_failure(tmp_path, monkeypatch,
     assert [endpoint.repo for endpoint, _state, _request in FakeDispatcher.dispatched] == [
         "duckdb-python"
     ]
-    assert "Dispatched core_ready to https://example.invalid/core_ready" in captured.out
     assert (
-        "ERROR: Failed to dispatch core_ready to "
+        "Dispatched core_ready for DuckDB v1.2.3 to "
+        "duckdb/duckdb-python/OnCoreReady.yml@main"
+    ) in captured.out
+    assert (
+        "ERROR: Failed to dispatch core_ready for DuckDB v1.2.3 to "
         "duckdb/missing-workflow/OnCoreReady.yml@main: 404 Client Error"
     ) in captured.err
     assert "ERROR: 1 dispatch(es) failed" in captured.err
@@ -211,7 +310,8 @@ def test_cli_emits_github_actions_annotation_for_endpoint_failure(
             str(config),
             "--bucket",
             "duckdb-release-state",
-            "--dry-run-github",
+            "--github-token",
+            "fake",
         ]
     )
 
@@ -219,7 +319,7 @@ def test_cli_emits_github_actions_annotation_for_endpoint_failure(
 
     assert result == 1
     assert (
-        "::error::Failed to dispatch core_ready to "
+        "::error::Failed to dispatch core_ready for DuckDB v1.2.3 to "
         "duckdb/missing-workflow/OnCoreReady.yml@main: 404 Client Error"
     ) in captured.err
     assert "ERROR: 1 dispatch(es) failed" in captured.err

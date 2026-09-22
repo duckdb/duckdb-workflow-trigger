@@ -45,7 +45,7 @@ class GitHubDispatcher:
     def dispatch(self, endpoint: Endpoint, state: ReleaseState) -> DispatchRequest:
         request = self.build_request(endpoint, state)
         if self.dry_run:
-            print(f"DRY RUN: would dispatch {endpoint.name} to {request.url}")
+            print(f"DRY RUN: would dispatch {endpoint.dispatch_description(state)}")
             print(json.dumps(request.body, indent=2, sort_keys=True))
             return request
 
