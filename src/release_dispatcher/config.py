@@ -14,6 +14,7 @@ RELEASE_LINE_PATTERN = re.compile(r"^(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?$")
 DUCKDB_VERSION_PATTERN = re.compile(
     r"^v?(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)(?:[.\-+].+)?$"
 )
+_INPUTS_UNSET = object()
 
 
 @dataclass(frozen=True)
@@ -62,12 +63,21 @@ def load_endpoints(path: Path) -> list[Endpoint]:
     hooks = data.get("hooks")
     if not isinstance(hooks, dict):
         raise ValueError("endpoint config must contain a hooks mapping")
+    default_inputs = _parse_default_inputs(data.get("defaults"))
 
     endpoints: list[Endpoint] = []
     for hook, hook_endpoints in hooks.items():
         hook_name = _non_empty_string(hook, "hook name")
         if isinstance(hook_endpoints, list):
-            endpoints.extend(_endpoints_for_targets(hook_name, hook_name, hook_endpoints, hook_name))
+            endpoints.extend(
+                _endpoints_for_targets(
+                    hook_name,
+                    hook_name,
+                    hook_endpoints,
+                    hook_name,
+                    default_inputs=default_inputs,
+                )
+            )
             continue
         if not isinstance(hook_endpoints, dict):
             raise ValueError(f"hook {hook_name} must contain a workflow list or endpoint mapping")
@@ -79,6 +89,7 @@ def load_endpoints(path: Path) -> list[Endpoint]:
                     hook_name,
                     workflow_targets,
                     f"{hook_name}.{endpoint_name}",
+                    default_inputs=default_inputs,
                 )
             )
     return endpoints
@@ -121,10 +132,21 @@ def registered_client_names(endpoints: list[Endpoint]) -> set[str]:
 
 
 def _endpoints_for_group(
-    name: str, hook: str, workflow_targets: object, context: str
+    name: str,
+    hook: str,
+    workflow_targets: object,
+    context: str,
+    *,
+    default_inputs: dict[str, str] | None,
 ) -> list[Endpoint]:
     if isinstance(workflow_targets, list):
-        return _endpoints_for_targets(name, hook, workflow_targets, context)
+        return _endpoints_for_targets(
+            name,
+            hook,
+            workflow_targets,
+            context,
+            default_inputs=default_inputs,
+        )
     if not isinstance(workflow_targets, dict):
         raise ValueError(
             f"endpoint {context} must be a workflow list or release-line mapping"
@@ -150,6 +172,7 @@ def _endpoints_for_group(
                 release_targets,
                 f"{context}.{release_line}",
                 release_line=release_line,
+                default_inputs=default_inputs,
             )
         )
     return endpoints
@@ -162,6 +185,7 @@ def _endpoints_for_targets(
     context: str,
     *,
     release_line: str | None = None,
+    default_inputs: dict[str, str] | None,
 ) -> list[Endpoint]:
     if not isinstance(workflow_targets, list):
         raise ValueError(f"endpoint {context} must be a workflow list")
@@ -176,6 +200,11 @@ def _endpoints_for_targets(
             _non_empty_string(endpoint_config.get("workflow"), f"workflow for {endpoint_context}"),
             endpoint_context,
         )
+        configured_inputs = endpoint_config.get("inputs", _INPUTS_UNSET)
+        if configured_inputs is _INPUTS_UNSET:
+            inputs = dict(default_inputs) if default_inputs is not None else None
+        else:
+            inputs = _parse_inputs(configured_inputs, endpoint_context)
         endpoints.append(
             Endpoint(
                 name=name,
@@ -184,11 +213,19 @@ def _endpoints_for_targets(
                 repo=repo,
                 workflow=workflow,
                 ref=ref,
-                inputs=_parse_inputs(endpoint_config.get("inputs"), endpoint_context),
+                inputs=inputs,
                 release_line=release_line,
             )
         )
     return endpoints
+
+
+def _parse_default_inputs(defaults: object) -> dict[str, str] | None:
+    if defaults is None:
+        return None
+    if not isinstance(defaults, dict):
+        raise ValueError("endpoint config defaults must be a mapping")
+    return _parse_inputs(defaults.get("inputs"), "defaults")
 
 
 def _select_release_line(duckdb_version: str, release_lines: set[str]) -> str | None:

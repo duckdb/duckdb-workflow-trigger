@@ -35,6 +35,110 @@ hooks:
     }
 
 
+def test_load_endpoints_applies_yaml_default_inputs_to_all_hooks(tmp_path: Path):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        """
+defaults:
+  inputs:
+    duckdb-sha: "{duckdb_commit}"
+    duckdb-version: "{duckdb_version}"
+hooks:
+  core_ready:
+    - workflow: duckdb/core-consumer/OnCoreReady.yml@main
+  client_ready:
+    r:
+      - workflow: duckdb/client-consumer/OnClientReady.yml@main
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = load_endpoints(config)
+
+    assert [endpoint.inputs for endpoint in endpoints] == [
+        {
+            "duckdb-sha": "{duckdb_commit}",
+            "duckdb-version": "{duckdb_version}",
+        },
+        {
+            "duckdb-sha": "{duckdb_commit}",
+            "duckdb-version": "{duckdb_version}",
+        },
+    ]
+    assert endpoints[0].inputs is not endpoints[1].inputs
+
+
+def test_explicit_inputs_replace_yaml_defaults(tmp_path: Path):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        """
+defaults:
+  inputs:
+    duckdb-sha: "{duckdb_commit}"
+    duckdb-version: "{duckdb_version}"
+hooks:
+  core_ready:
+    - workflow: duckdb/mapping/OnCoreReady.yml@main
+      inputs:
+        pypi-index: prod
+    - workflow: duckdb/list/OnCoreReady.yml@main
+      inputs:
+        - duckdb_commit
+    - workflow: duckdb/null/OnCoreReady.yml@main
+      inputs: null
+    - workflow: duckdb/empty/OnCoreReady.yml@main
+      inputs: []
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = {endpoint.repo: endpoint for endpoint in load_endpoints(config)}
+
+    assert endpoints["mapping"].inputs == {"pypi-index": "prod"}
+    assert endpoints["list"].inputs == {"duckdb_commit": "{duckdb_commit}"}
+    assert endpoints["null"].inputs is None
+    assert endpoints["empty"].inputs == {}
+
+
+def test_omitted_inputs_remain_empty_without_yaml_defaults(tmp_path: Path):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        """
+hooks:
+  core_ready:
+    - workflow: duckdb/duckdb-python/OnCoreReady.yml@main
+""",
+        encoding="utf-8",
+    )
+
+    assert load_endpoints(config)[0].inputs is None
+
+
+@pytest.mark.parametrize(
+    ("defaults", "error"),
+    [
+        ("defaults: invalid", "defaults must be a mapping"),
+        ("defaults:\n  inputs: invalid", "inputs must be a mapping or list"),
+    ],
+)
+def test_load_endpoints_rejects_invalid_yaml_defaults(
+    tmp_path: Path, defaults: str, error: str
+):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        f"""
+{defaults}
+hooks:
+  core_ready:
+    - workflow: duckdb/duckdb-python/OnCoreReady.yml@main
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=error):
+        load_endpoints(config)
+
+
 def test_matching_endpoints_filters_by_hook(tmp_path: Path):
     config = tmp_path / "endpoints.yml"
     config.write_text(

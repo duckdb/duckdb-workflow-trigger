@@ -43,3 +43,42 @@ def test_repository_endpoints_route_python_by_release_line():
         "odbc",
         "benchmark",
     }
+
+
+def test_repository_endpoints_apply_and_replace_default_inputs():
+    endpoints = load_endpoints(Path("endpoints.yml"))
+    commit = "0123456789abcdef0123456789abcdef01234567"
+    core_state = parse_release_state(
+        event="core_ready",
+        duckdb_version="v2.0.7",
+        duckdb_commit=commit,
+        status="success",
+    )
+    client_state = parse_release_state(
+        event="client_ready",
+        duckdb_version="v2.0.7",
+        duckdb_commit=commit,
+        status="success",
+        client="r",
+    )
+
+    core = {endpoint.name: endpoint for endpoint in matching_endpoints(endpoints, core_state)}
+    expected_defaults = {
+        "duckdb-sha": commit,
+        "duckdb-version": "v2.0.7",
+    }
+
+    assert core["python"].render_inputs(core_state) == {
+        **expected_defaults,
+        "pypi-index": "prod",
+    }
+    assert core["java"].render_inputs(core_state) == expected_defaults
+    assert core["odbc"].render_inputs(core_state) == expected_defaults
+    assert core["benchmark"].render_inputs(core_state) == expected_defaults
+
+    [r_endpoint] = matching_endpoints(endpoints, client_state)
+    assert r_endpoint.render_inputs(client_state) == {
+        "duckdb_version": "v2.0.7",
+        "duckdb_commit": commit,
+        "payload": '{"name": "r", "phase": "client_ready"}',
+    }

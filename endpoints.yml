@@ -1,3 +1,9 @@
+defaults:
+  # Endpoints inherit these inputs when they do not define their own inputs.
+  inputs:
+    duckdb-sha: "{duckdb_commit}"
+    duckdb-version: "{duckdb_version}"
+
 hooks:
   # Trigger downstream workflows after DuckDB core release artifacts are ready.
   # Group endpoints by downstream integration, then by DuckDB release line.
@@ -7,8 +13,8 @@ hooks:
       "2.0":
         # Format: workflow: owner/repo/workflow.yml@ref
         - workflow: duckdb/duckdb-python/release.yml@v2.0-cyanoptera
-          # Mapping form supports receiver-specific input names, static values,
-          # and template values from the release event.
+          # Explicit inputs replace the defaults, so this mapping repeats the
+          # default values before adding the receiver-specific PyPI input.
           inputs:
             duckdb-sha: "{duckdb_commit}"
             duckdb-version: "{duckdb_version}"
@@ -21,23 +27,18 @@ hooks:
             duckdb-version: "{duckdb_version}"
             pypi-index: prod
     java:
+      "2.0":
+        - workflow: duckdb/duckdb-java/Vendor.yml@v2.0-cyanoptera
       "2":
         - workflow: duckdb/duckdb-java/Vendor.yml@main
-          inputs:
-            duckdb-sha: "{duckdb_commit}"
-            duckdb-version: "{duckdb_version}"
     odbc:
+      "2.0":
+        - workflow: duckdb/duckdb-odbc/Vendor.yml@v2.0-cyanoptera
       "2":
         - workflow: duckdb/duckdb-odbc/Vendor.yml@main
-          inputs:
-            duckdb-sha: "{duckdb_commit}"
-            duckdb-version: "{duckdb_version}"
     benchmark:
       "2":
         - workflow: duckdblabs/duckdb-benchmark/Benchmark.yml@main
-          inputs:
-            duckdb-sha: "{duckdb_commit}"
-            duckdb-version: "{duckdb_version}"
 
   # Trigger client-specific workflows after a client release is ready.
   # Group endpoints by client name so the payload matches the downstream release.
@@ -45,7 +46,7 @@ hooks:
     r:
       "2":
         - workflow: duckdb/duckdb-r/OnClientReady.yml@main
-          # List form forwards same-named release values to the receiver workflow.
+          # List form replaces the defaults and forwards same-named values.
           inputs:
             - duckdb_version
             - duckdb_commit

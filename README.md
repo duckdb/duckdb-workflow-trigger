@@ -26,6 +26,12 @@ default DuckDB release values available to endpoint templates are:
 Endpoints are configured in `endpoints.yml` and grouped by hook.
 
 ```yaml
+defaults:
+  # Endpoints inherit these inputs when they do not define their own inputs.
+  inputs:
+    duckdb-sha: "{duckdb_commit}"
+    duckdb-version: "{duckdb_version}"
+
 hooks:
   # Dispatch after DuckDB core release artifacts are ready.
   # Group endpoints by downstream integration, then by DuckDB release line.
@@ -35,8 +41,8 @@ hooks:
       "2.0":
         # workflow is owner/repo/workflow.yml@ref. The receiver runs at this ref.
         - workflow: duckdb/duckdb-python/release.yml@v2.0-cyanoptera
-          # Mapping form supports receiver-specific input names, static values,
-          # and template values such as {duckdb_commit}.
+          # Explicit inputs replace the defaults, so include the defaults again
+          # when adding receiver-specific values.
           inputs:
             duckdb-sha: "{duckdb_commit}"
             duckdb-version: "{duckdb_version}"
@@ -52,8 +58,6 @@ hooks:
     java:
       "2":
         - workflow: duckdb/duckdb-java/Vendor.yml@main
-          inputs:
-            duckdb-sha: "{duckdb_commit}"
 
   # Dispatch after a specific client release is ready.
   # Group endpoints by client name so the payload matches the downstream release.
@@ -61,7 +65,7 @@ hooks:
     r:
       "2":
         - workflow: duckdb/duckdb-r/OnClientReady.yml@main
-          # List form forwards same-named release values to the receiver workflow.
+          # List form replaces the defaults and forwards same-named values.
           inputs:
             - duckdb_version
             - duckdb_commit
@@ -74,6 +78,11 @@ uses `"2"`. A major route matches only that major version. Release-line keys
 must be quoted so YAML treats them as strings. If a successful event has no
 route for an applicable downstream, dispatch fails before its immutable state
 is written.
+
+An endpoint that omits `inputs` inherits `defaults.inputs`. Any explicit input
+mapping or list replaces the defaults instead of merging with them. Use
+`inputs: null` or an empty list to send no inputs. If `defaults` is omitted,
+endpoints without inputs retain the legacy empty-input behavior.
 
 `workflow` uses `owner/repo/workflow.yml@ref`; the receiver workflow runs at
 that ref. Mapping-form inputs support receiver-specific names, static values,
