@@ -1,25 +1,25 @@
 services:
-  minio:
-    image: minio/minio:latest
+  s3:
+    image: docker.io/pgsty/silo:RELEASE.2026-09-16T00-00-00Z
     command: server /data --console-address ":9001"
     ports:
       - "9000:9000"
       - "9001:9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: s3admin
+      MINIO_ROOT_PASSWORD: s3admin123
     volumes:
-      - minio-data:/data
+      - s3-data:/data
 
   create-bucket:
-    image: minio/mc:latest
+    image: docker.io/pgsty/silo:RELEASE.2026-09-16T00-00-00Z
     depends_on:
-      - minio
+      - s3
     entrypoint: >
       /bin/sh -c "
-      until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 1; done;
-      mc mb --ignore-existing local/duckdb-release-state;
+      until mcli alias set local http://s3:9000 s3admin s3admin123; do sleep 1; done;
+      mcli mb --ignore-existing local/duckdb-release-state;
       "
 
 volumes:
-  minio-data:
+  s3-data:

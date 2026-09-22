@@ -164,8 +164,8 @@ uv run release-dispatcher \
 ```
 
 The example environment sets `DRY_RUN_GITHUB=true`, so the dispatcher writes
-state to MinIO and prints the GitHub workflow dispatch request instead of
-calling GitHub. For `client_ready`, add `--name <client>`. The deprecated
+state to the local S3-compatible service and prints the GitHub workflow dispatch
+request instead of calling GitHub. For `client_ready`, add `--name <client>`. The deprecated
 `--client <client>` spelling is also accepted. To record a benchmark check, use:
 
 ```sh

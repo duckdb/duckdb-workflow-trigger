@@ -27,7 +27,7 @@ def s3_env():
     }
     missing = [name for name, value in required.items() if not value]
     if missing:
-        pytest.fail(f"missing MinIO test environment variable(s): {', '.join(missing)}")
+        pytest.fail(f"missing S3 test environment variable(s): {', '.join(missing)}")
     return required
 
 
@@ -63,7 +63,7 @@ def version_prefix(s3_client, s3_env):
     _delete_prefix(s3_client, s3_env["RELEASE_STATE_BUCKET"], f"{version}/")
 
 
-def test_create_core_ready_state_in_minio(state_store, s3_client, s3_env, version_prefix):
+def test_create_core_ready_state_in_s3(state_store, s3_client, s3_env, version_prefix):
     state = parse_release_state(
         event="core_ready",
         duckdb_version=version_prefix,
@@ -79,7 +79,7 @@ def test_create_core_ready_state_in_minio(state_store, s3_client, s3_env, versio
     assert b'"event": "core_ready"' in stored["Body"].read()
 
 
-def test_duplicate_state_write_fails_in_minio(state_store, version_prefix):
+def test_duplicate_state_write_fails_in_s3(state_store, version_prefix):
     state = parse_release_state(
         event="core_ready",
         duckdb_version=version_prefix,
@@ -93,7 +93,7 @@ def test_duplicate_state_write_fails_in_minio(state_store, version_prefix):
         state_store.create_state(state)
 
 
-def test_create_client_ready_state_in_minio(state_store, s3_client, s3_env, version_prefix):
+def test_create_client_ready_state_in_s3(state_store, s3_client, s3_env, version_prefix):
     state = parse_release_state(
         event="client_ready",
         duckdb_version=version_prefix,
@@ -111,7 +111,7 @@ def test_create_client_ready_state_in_minio(state_store, s3_client, s3_env, vers
     assert b'"client"' not in body
 
 
-def test_create_check_state_in_minio(state_store, s3_client, s3_env, version_prefix):
+def test_create_check_state_in_s3(state_store, s3_client, s3_env, version_prefix):
     state = parse_release_state(
         event="check",
         duckdb_version=version_prefix,
