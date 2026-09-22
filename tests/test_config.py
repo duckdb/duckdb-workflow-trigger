@@ -183,7 +183,7 @@ hooks:
         duckdb_version="v1.2.3",
         duckdb_commit="0123456789abcdef0123456789abcdef01234567",
         status="success",
-        client="python",
+        name="python",
     )
 
     endpoints = matching_endpoints(load_endpoints(config), state)
@@ -267,13 +267,41 @@ hooks:
         duckdb_version="v2.0.1",
         duckdb_commit="0123456789abcdef0123456789abcdef01234567",
         status="success",
-        client="python",
+        name="python",
     )
 
     endpoints = matching_endpoints(load_endpoints(config), state)
 
     assert [(endpoint.name, endpoint.ref, endpoint.release_line) for endpoint in endpoints] == [
         ("python", "v2.0-cyanoptera", "2.0")
+    ]
+
+
+def test_matching_endpoints_filters_check_by_name(tmp_path: Path):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        """
+hooks:
+  check:
+    benchmark:
+      - workflow: duckdb/foo/AfterBenchmark.yml@main
+    test:
+      - workflow: duckdb/bar/AfterTests.yml@main
+""",
+        encoding="utf-8",
+    )
+    state = parse_release_state(
+        event="check",
+        duckdb_version="v1.2.3",
+        duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+        status="success",
+        name="benchmark",
+    )
+
+    endpoints = matching_endpoints(load_endpoints(config), state)
+
+    assert [(endpoint.name, endpoint.workflow) for endpoint in endpoints] == [
+        ("benchmark", "AfterBenchmark.yml")
     ]
 
 
@@ -555,7 +583,7 @@ hooks:
         duckdb_version="v1.2.3",
         duckdb_commit="0123456789abcdef0123456789abcdef01234567",
         status="success",
-        client="python",
+        name="python",
         source_run_url="https://github.com/duckdb/duckdb/actions/runs/123",
     )
 
@@ -565,6 +593,52 @@ hooks:
         "payload": '{"name": "python", "phase": "client_ready"}',
         "source": "https://github.com/duckdb/duckdb/actions/runs/123",
         "static": "prod",
+    }
+
+
+def test_endpoint_renders_name_and_legacy_client_alias(tmp_path: Path):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        """
+hooks:
+  client_ready:
+    python:
+      - workflow: duckdb/duckdb-python/Release.yml@main
+        inputs:
+          name: "{name}"
+          client: "{client}"
+  check:
+    benchmark:
+      - workflow: duckdb/foo/AfterBenchmark.yml@main
+        inputs:
+          name: "{name}"
+          client: "{client}"
+""",
+        encoding="utf-8",
+    )
+    client_endpoint, check_endpoint = load_endpoints(config)
+    client_state = parse_release_state(
+        event="client_ready",
+        duckdb_version="v1.2.3",
+        duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+        status="success",
+        name="python",
+    )
+    check_state = parse_release_state(
+        event="check",
+        duckdb_version="v1.2.3",
+        duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+        status="success",
+        name="benchmark",
+    )
+
+    assert client_endpoint.render_inputs(client_state) == {
+        "name": "python",
+        "client": "python",
+    }
+    assert check_endpoint.render_inputs(check_state) == {
+        "name": "benchmark",
+        "client": "",
     }
 
 

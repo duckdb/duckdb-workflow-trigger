@@ -5,9 +5,13 @@ dispatcher for DuckDB release state.
 
 ## Usage
 
-The release dispatcher accepts `core_ready` and `client_ready` workflow dispatch
-events, creates an immutable state file in S3, and dispatches successful events
-to registered downstream repository workflows.
+The release dispatcher accepts `core_ready`, `client_ready`, and `check` workflow
+dispatch events, creates an immutable state file in S3, and dispatches successful
+events to registered downstream repository workflows.
+
+The `client_ready` and `check` events are named. Use `name` for new calls. The
+legacy `client` input remains supported as an alias for `name` on `client_ready`
+events.
 
 Downstream workflows receive the inputs configured for their endpoint. The
 default DuckDB release values available to endpoint templates are:
@@ -17,7 +21,8 @@ default DuckDB release values available to endpoint templates are:
 - `payload`, for example `{"phase":"core_ready"}` or
   `{"phase":"client_ready","name":"python"}`
 - `event`
-- `client`
+- `name`
+- `client`, as a compatibility alias for `name` on `client_ready`
 - `status`
 - `source_run_url`
 
@@ -99,15 +104,44 @@ target, for example:
 Dispatched core_ready.python for DuckDB v2.0.7 (release line 2.0) to duckdb/duckdb-python/release.yml@v2.0-cyanoptera
 ```
 
+Named checks use the same endpoint shape when a successful check should trigger
+another workflow:
+
+```yaml
+hooks:
+  check:
+    benchmark:
+      - workflow: duckdb/example/AfterBenchmark.yml@main
+        inputs:
+          duckdb-sha: "{duckdb_commit}"
+```
+
+A check does not need an endpoint to be recorded. For example, the benchmark
+workflow reports its result with the bundled action:
+
+```yaml
+- name: Record benchmark status
+  if: ${{ always() }}
+  uses: duckdb/duckdb-workflow-trigger/dispatch@main
+  with:
+    github_token: ${{ secrets.PAT_TOKEN }}
+    event: check
+    name: benchmark
+    duckdb_version: ${{ inputs.duckdb-version }}
+    duckdb_commit: ${{ inputs.duckdb-sha }}
+    status: ${{ needs.benchmark.result == 'success' && 'success' || 'failure' }}
+```
+
 ## Development
 
 Release state is written to immutable S3 keys:
 
 - `s3://$RELEASE_STATE_BUCKET/$duckdb_version/core/state.json`
-- `s3://$RELEASE_STATE_BUCKET/$duckdb_version/clients/$client/state.json`
+- `s3://$RELEASE_STATE_BUCKET/$duckdb_version/clients/$name/state.json`
+- `s3://$RELEASE_STATE_BUCKET/$duckdb_version/checks/$name/state.json`
 
 Duplicate state writes fail by using S3 create-only semantics. The GitHub
-workflow also queues duplicate event/version/client runs with a concurrency
+workflow also queues duplicate event/version/name runs with a concurrency
 group and `cancel-in-progress: false`.
 
 ### Local dispatcher setup
@@ -130,5 +164,15 @@ uv run release-dispatcher \
 ```
 
 The example environment sets `DRY_RUN_GITHUB=true`, so the dispatcher writes
-state to MinIO and prints the GitHub workflow dispatch request instead of
-calling GitHub. For `client_ready`, add `--client <name>`.
+state to the local S3-compatible service and prints the GitHub workflow dispatch
+request instead of calling GitHub. For `client_ready`, add `--name <client>`. The deprecated
+`--client <client>` spelling is also accepted. To record a benchmark check, use:
+
+```sh
+uv run release-dispatcher \
+  --event check \
+  --name benchmark \
+  --duckdb-version v1.2.3 \
+  --duckdb-commit 0123456789abcdef0123456789abcdef01234567 \
+  --status success
+```

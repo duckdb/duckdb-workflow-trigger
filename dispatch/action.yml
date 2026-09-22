@@ -1,12 +1,12 @@
 name: Record DuckDB release status
-description: Trigger the DuckDB release dispatcher workflow with release status metadata.
+description: Trigger the DuckDB release dispatcher workflow with release or check status metadata.
 
 inputs:
   github_token:
     description: GitHub token allowed to dispatch duckdb/duckdb-workflow-trigger workflows.
     required: true
   event:
-    description: Release event phase, for example core_ready or client_ready.
+    description: Release event phase or check result, for example core_ready, client_ready, or check.
     required: true
   duckdb_version:
     description: Full DuckDB version.
@@ -18,7 +18,10 @@ inputs:
     description: Event status, for example success, failure, or skipped.
     required: true
   client:
-    description: Client name for client_ready events.
+    description: Deprecated client name alias for client_ready events.
+    required: false
+  name:
+    description: Name for client_ready or check events.
     required: false
   source_run_url:
     description: URL of the workflow run that produced this status.
@@ -38,6 +41,7 @@ runs:
         DISPATCH_DUCKDB_VERSION: ${{ inputs.duckdb_version }}
         DISPATCH_DUCKDB_COMMIT: ${{ inputs.duckdb_commit }}
         DISPATCH_STATUS: ${{ inputs.status }}
+        DISPATCH_NAME: ${{ inputs.name }}
         DISPATCH_CLIENT: ${{ inputs.client }}
         DISPATCH_SOURCE_RUN_URL: ${{ inputs.source_run_url }}
         DISPATCH_MESSAGE: ${{ inputs.message }}
@@ -45,13 +49,50 @@ runs:
       run: |
         set -euo pipefail
 
+        name="$DISPATCH_NAME"
+        case "$DISPATCH_EVENT" in
+          core_ready)
+            if [[ -n "$name" || -n "$DISPATCH_CLIENT" ]]; then
+              echo "name and client must be omitted for core_ready" >&2
+              exit 1
+            fi
+            ;;
+          client_ready)
+            if [[ -n "$name" && -n "$DISPATCH_CLIENT" && "$name" != "$DISPATCH_CLIENT" ]]; then
+              echo "name and client must match when both are provided" >&2
+              exit 1
+            fi
+            name="${name:-$DISPATCH_CLIENT}"
+            if [[ -z "$name" ]]; then
+              echo "name or client is required for client_ready" >&2
+              exit 1
+            fi
+            ;;
+          check)
+            if [[ -n "$DISPATCH_CLIENT" ]]; then
+              echo "client must be omitted for check" >&2
+              exit 1
+            fi
+            if [[ -z "$name" ]]; then
+              echo "name is required for check" >&2
+              exit 1
+            fi
+            ;;
+          *)
+            echo "event must be core_ready, client_ready, or check" >&2
+            exit 1
+            ;;
+        esac
+
         source_run_url="${DISPATCH_SOURCE_RUN_URL:-$DEFAULT_SOURCE_RUN_URL}"
         message="$DISPATCH_MESSAGE"
         if [[ -z "$message" ]]; then
           if [[ "$DISPATCH_EVENT" == "core_ready" ]]; then
             message="DuckDB core ready"
-          elif [[ -n "$DISPATCH_CLIENT" ]]; then
-            message="DuckDB ${DISPATCH_CLIENT} client ready"
+          elif [[ "$DISPATCH_EVENT" == "client_ready" ]]; then
+            message="DuckDB ${name} client ready"
+          elif [[ "$DISPATCH_EVENT" == "check" ]]; then
+            message="DuckDB ${name} check"
           else
             message="DuckDB release state recorded"
           fi
@@ -69,8 +110,8 @@ runs:
           --field "message=$message"
         )
 
-        if [[ -n "$DISPATCH_CLIENT" ]]; then
-          args+=(--field "client=$DISPATCH_CLIENT")
+        if [[ -n "$name" ]]; then
+          args+=(--field "name=$name")
         fi
 
         gh "${args[@]}"

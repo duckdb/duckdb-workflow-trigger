@@ -1,3 +1,4 @@
+import json
 import os
 import time
 from uuid import uuid4
@@ -26,7 +27,7 @@ def s3_env():
     }
     missing = [name for name, value in required.items() if not value]
     if missing:
-        pytest.fail(f"missing MinIO test environment variable(s): {', '.join(missing)}")
+        pytest.fail(f"missing S3 test environment variable(s): {', '.join(missing)}")
     return required
 
 
@@ -62,7 +63,7 @@ def version_prefix(s3_client, s3_env):
     _delete_prefix(s3_client, s3_env["RELEASE_STATE_BUCKET"], f"{version}/")
 
 
-def test_create_core_ready_state_in_minio(state_store, s3_client, s3_env, version_prefix):
+def test_create_core_ready_state_in_s3(state_store, s3_client, s3_env, version_prefix):
     state = parse_release_state(
         event="core_ready",
         duckdb_version=version_prefix,
@@ -78,7 +79,7 @@ def test_create_core_ready_state_in_minio(state_store, s3_client, s3_env, versio
     assert b'"event": "core_ready"' in stored["Body"].read()
 
 
-def test_duplicate_state_write_fails_in_minio(state_store, version_prefix):
+def test_duplicate_state_write_fails_in_s3(state_store, version_prefix):
     state = parse_release_state(
         event="core_ready",
         duckdb_version=version_prefix,
@@ -92,23 +93,41 @@ def test_duplicate_state_write_fails_in_minio(state_store, version_prefix):
         state_store.create_state(state)
 
 
-def test_create_client_ready_state_in_minio(state_store, s3_client, s3_env, version_prefix):
+def test_create_client_ready_state_in_s3(state_store, s3_client, s3_env, version_prefix):
     state = parse_release_state(
         event="client_ready",
         duckdb_version=version_prefix,
         duckdb_commit="0123456789abcdef0123456789abcdef01234567",
         status="success",
-        client="python",
+        name="python",
     )
 
     key = state_store.create_state(state)
     stored = s3_client.get_object(Bucket=s3_env["RELEASE_STATE_BUCKET"], Key=key)
 
     assert key == f"{version_prefix}/clients/python/state.json"
-    assert b'"client": "python"' in stored["Body"].read()
+    body = stored["Body"].read()
+    assert b'"name": "python"' in body
+    assert b'"client"' not in body
 
 
-def test_query_release_states_with_duckdb(state_store, s3_env, version_prefix):
+def test_create_check_state_in_s3(state_store, s3_client, s3_env, version_prefix):
+    state = parse_release_state(
+        event="check",
+        duckdb_version=version_prefix,
+        duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+        status="success",
+        name="benchmark",
+    )
+
+    key = state_store.create_state(state)
+    stored = s3_client.get_object(Bucket=s3_env["RELEASE_STATE_BUCKET"], Key=key)
+
+    assert key == f"{version_prefix}/checks/benchmark/state.json"
+    assert b'"event": "check"' in stored["Body"].read()
+
+
+def test_query_release_states_with_duckdb(state_store, s3_client, s3_env, version_prefix):
     state_store.create_state(
         parse_release_state(
             event="core_ready",
@@ -117,13 +136,37 @@ def test_query_release_states_with_duckdb(state_store, s3_env, version_prefix):
             status="success",
         )
     )
+    legacy_key = f"{version_prefix}/clients/legacy/state.json"
+    s3_client.put_object(
+        Bucket=s3_env["RELEASE_STATE_BUCKET"],
+        Key=legacy_key,
+        Body=json.dumps(
+            {
+                "event": "client_ready",
+                "duckdb_version": version_prefix,
+                "duckdb_commit": "0123456789abcdef0123456789abcdef01234567",
+                "status": "success",
+                "client": "legacy",
+            }
+        ),
+        ContentType="application/json",
+    )
     state_store.create_state(
         parse_release_state(
             event="client_ready",
             duckdb_version=version_prefix,
             duckdb_commit="0123456789abcdef0123456789abcdef01234567",
             status="success",
-            client="python",
+            name="python",
+        )
+    )
+    state_store.create_state(
+        parse_release_state(
+            event="check",
+            duckdb_version=version_prefix,
+            duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+            status="failure",
+            name="benchmark",
         )
     )
 
@@ -134,8 +177,9 @@ def test_query_release_states_with_duckdb(state_store, s3_env, version_prefix):
     )
     records = [dict(zip(relation.columns, row, strict=True)) for row in relation.fetchall()]
 
-    assert {record.get("client") for record in records} == {"python", None}
-    assert {record["event"] for record in records} == {"core_ready", "client_ready"}
+    assert {record.get("name") for record in records} == {"python", "benchmark", None}
+    assert {record.get("client") for record in records} == {"legacy", None}
+    assert {record["event"] for record in records} == {"core_ready", "client_ready", "check"}
 
 
 def _wait_for_bucket(client, bucket: str) -> None:

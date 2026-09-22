@@ -1,7 +1,7 @@
 [project]
 name = "duckdb-workflow-trigger"
 version = "0.1.0"
-description = "Dispatch DuckDB release state events to downstream repositories"
+description = "Record and dispatch DuckDB release state and check events"
 requires-python = ">=3.11"
 dependencies = [
     "boto3>=1.34",

@@ -45,10 +45,11 @@ def _report_dispatch_failure(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Dispatch DuckDB release workflow events")
-    parser.add_argument("--event", required=True, choices=["core_ready", "client_ready"])
+    parser.add_argument("--event", required=True, choices=["core_ready", "client_ready", "check"])
     parser.add_argument("--duckdb-version", required=True)
     parser.add_argument("--duckdb-commit", required=True)
     parser.add_argument("--status", required=True, choices=["success", "failure", "skipped"])
+    parser.add_argument("--name")
     parser.add_argument("--client")
     parser.add_argument("--message")
     parser.add_argument("--source-run-url")
@@ -75,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
             duckdb_version=args.duckdb_version,
             duckdb_commit=args.duckdb_commit,
             status=args.status,
+            name=args.name,
             client=args.client,
             message=args.message,
             source_run_url=args.source_run_url,
@@ -83,8 +85,11 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         parser.error(str(exc))
 
-    if state.event == "client_ready" and state.client not in registered_client_names(endpoints):
-        print(f"WARNING: client '{state.client}' is not registered in {args.endpoint_config}", file=sys.stderr)
+    if state.event == "client_ready" and state.name not in registered_client_names(endpoints):
+        print(
+            f"WARNING: client '{state.name}' is not registered in {args.endpoint_config}",
+            file=sys.stderr,
+        )
 
     endpoints_to_dispatch: list[Endpoint] = []
     if state.should_dispatch:
