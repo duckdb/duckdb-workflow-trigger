@@ -42,6 +42,7 @@ def test_repository_endpoints_route_python_by_release_line():
         "java",
         "odbc",
         "benchmark",
+        "duckdb-rs",
     }
 
 
