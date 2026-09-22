@@ -4,12 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       event:
-        description: Release event phase
+        description: Release event phase or check result
         required: true
         type: choice
         options:
           - core_ready
           - client_ready
+          - check
       duckdb_version:
         description: Full DuckDB version
         required: true
@@ -27,7 +28,11 @@ on:
           - failure
           - skipped
       client:
-        description: Client name, required for client_ready
+        description: Deprecated client name alias for client_ready
+        required: false
+        type: string
+      name:
+        description: Name, required for client_ready and check
         required: false
         type: string
       message:
@@ -40,7 +45,7 @@ on:
         type: string
 
 concurrency:
-  group: release-dispatch-${{ inputs.event }}-${{ inputs.duckdb_version }}-${{ inputs.client || 'core' }}
+  group: release-dispatch-${{ inputs.event }}-${{ inputs.duckdb_version }}-${{ inputs.name || inputs.client || 'core' }}
   cancel-in-progress: false
 
 jobs:
@@ -69,6 +74,7 @@ jobs:
           DISPATCH_DUCKDB_VERSION: ${{ inputs.duckdb_version }}
           DISPATCH_DUCKDB_COMMIT: ${{ inputs.duckdb_commit }}
           DISPATCH_STATUS: ${{ inputs.status }}
+          DISPATCH_NAME: ${{ inputs.name }}
           DISPATCH_CLIENT: ${{ inputs.client }}
           DISPATCH_MESSAGE: ${{ inputs.message }}
           DISPATCH_SOURCE_RUN_URL: ${{ inputs.source_run_url }}
@@ -84,6 +90,7 @@ jobs:
             --duckdb-version "$DISPATCH_DUCKDB_VERSION" \
             --duckdb-commit "$DISPATCH_DUCKDB_COMMIT" \
             --status "$DISPATCH_STATUS" \
+            --name "$DISPATCH_NAME" \
             --client "$DISPATCH_CLIENT" \
             --message "$DISPATCH_MESSAGE" \
             --source-run-url "$DISPATCH_SOURCE_RUN_URL"

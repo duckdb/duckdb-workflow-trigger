@@ -153,6 +153,7 @@ def test_cli_warns_for_unknown_client_but_stores(tmp_path, monkeypatch, capsys):
 
     assert result == 0
     assert FakeStore.created[0].state_key == "v1.2.3/clients/r/state.json"
+    assert FakeStore.created[0].name == "r"
     assert "WARNING: client 'r' is not registered" in captured.err
 
 
@@ -229,6 +230,44 @@ def test_cli_logs_selected_workflow_and_release_line(tmp_path, monkeypatch, caps
         "Dispatched core_ready.python for DuckDB v2.0.7 (release line 2.0) to "
         "duckdb/duckdb-python/release.yml@v2.0-cyanoptera"
     ) in captured.out
+
+
+def test_cli_stores_successful_named_check_without_registered_endpoint(
+    tmp_path, monkeypatch, capsys
+):
+    config = tmp_path / "endpoints.yml"
+    write_config(config)
+    FakeStore.created = []
+    FakeDispatcher.attempted = []
+    FakeDispatcher.dispatched = []
+    FakeDispatcher.failing_repos = set()
+    monkeypatch.setattr(cli, "S3StateStore", FakeStore)
+    monkeypatch.setattr(cli, "GitHubDispatcher", FakeDispatcher)
+
+    result = cli.main(
+        [
+            "--event",
+            "check",
+            "--name",
+            "benchmark",
+            "--duckdb-version",
+            "v1.2.3",
+            "--duckdb-commit",
+            "0123456789abcdef0123456789abcdef01234567",
+            "--status",
+            "success",
+            "--endpoint-config",
+            str(config),
+            "--bucket",
+            "duckdb-release-state",
+            "--dry-run-github",
+        ]
+    )
+
+    assert result == 0
+    assert FakeStore.created[0].state_key == "v1.2.3/checks/benchmark/state.json"
+    assert FakeDispatcher.dispatched == []
+    assert "No endpoints registered for hook check" in capsys.readouterr().out
 
 
 def test_cli_continues_dispatching_after_endpoint_failure(tmp_path, monkeypatch, capsys):

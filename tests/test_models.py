@@ -22,15 +22,56 @@ def test_client_ready_state_path_and_payload():
         duckdb_version="v1.2.3",
         duckdb_commit="0123456789abcdef0123456789abcdef01234567",
         status="success",
-        client="python",
+        name="python",
     )
 
     assert state.state_key == "v1.2.3/clients/python/state.json"
     assert state.outbound_payload == {"phase": "client_ready", "name": "python"}
+    assert state.to_json_dict()["name"] == "python"
+    assert "client" not in state.to_json_dict()
 
 
-def test_client_ready_requires_client():
-    with pytest.raises(ValueError, match="client is required"):
+def test_client_ready_accepts_client_alias():
+    state = parse_release_state(
+        event="client_ready",
+        duckdb_version="v1.2.3",
+        duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+        status="success",
+        client="python",
+    )
+
+    assert state.name == "python"
+    assert state.to_json_dict()["name"] == "python"
+    assert "client" not in state.to_json_dict()
+
+
+def test_client_ready_accepts_matching_name_and_client():
+    state = parse_release_state(
+        event="client_ready",
+        duckdb_version="v1.2.3",
+        duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+        status="success",
+        name="python",
+        client="python",
+    )
+
+    assert state.name == "python"
+
+
+def test_client_ready_rejects_conflicting_name_and_client():
+    with pytest.raises(ValueError, match="name and client must match"):
+        parse_release_state(
+            event="client_ready",
+            duckdb_version="v1.2.3",
+            duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+            status="success",
+            name="python",
+            client="r",
+        )
+
+
+def test_client_ready_requires_name_or_client():
+    with pytest.raises(ValueError, match="name or client is required"):
         parse_release_state(
             event="client_ready",
             duckdb_version="v1.2.3",
@@ -39,14 +80,50 @@ def test_client_ready_requires_client():
         )
 
 
-def test_core_ready_rejects_client():
-    with pytest.raises(ValueError, match="client must be omitted"):
+def test_core_ready_rejects_name():
+    with pytest.raises(ValueError, match="name and client must be omitted"):
         parse_release_state(
             event="core_ready",
             duckdb_version="v1.2.3",
             duckdb_commit="0123456789abcdef0123456789abcdef01234567",
             status="success",
-            client="python",
+            name="python",
+        )
+
+
+def test_check_state_path_and_payload():
+    state = parse_release_state(
+        event="check",
+        duckdb_version="v1.2.3",
+        duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+        status="success",
+        name="benchmark",
+    )
+
+    assert state.state_key == "v1.2.3/checks/benchmark/state.json"
+    assert state.outbound_payload == {"phase": "check", "name": "benchmark"}
+    assert state.to_json_dict()["name"] == "benchmark"
+
+
+def test_check_requires_name():
+    with pytest.raises(ValueError, match="name is required for check"):
+        parse_release_state(
+            event="check",
+            duckdb_version="v1.2.3",
+            duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+            status="success",
+        )
+
+
+def test_check_rejects_client_alias():
+    with pytest.raises(ValueError, match="client must be omitted for check"):
+        parse_release_state(
+            event="check",
+            duckdb_version="v1.2.3",
+            duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+            status="success",
+            name="benchmark",
+            client="benchmark",
         )
 
 

@@ -57,7 +57,7 @@ def test_build_workflow_dispatch_request_for_client_ready():
         duckdb_version="v1.2.3",
         duckdb_commit="0123456789abcdef0123456789abcdef01234567",
         status="success",
-        client="python",
+        name="python",
     )
 
     request = GitHubDispatcher(token="fake", dry_run=True).build_request(endpoint, state)

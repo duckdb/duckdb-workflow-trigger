@@ -97,8 +97,8 @@ def load_endpoints(path: Path) -> list[Endpoint]:
 
 def matching_endpoints(endpoints: list[Endpoint], state: ReleaseState) -> list[Endpoint]:
     matches = [endpoint for endpoint in endpoints if endpoint.hook == state.event]
-    if state.event == "client_ready":
-        matches = [endpoint for endpoint in matches if endpoint.name == state.client]
+    if state.name is not None:
+        matches = [endpoint for endpoint in matches if endpoint.name == state.name]
 
     grouped: dict[str, list[Endpoint]] = {}
     for endpoint in matches:
@@ -312,7 +312,8 @@ def _template_context(state: ReleaseState) -> dict[str, str]:
             "duckdb_version": state.duckdb_version,
             "duckdb_commit": state.duckdb_commit,
             "event": state.event,
-            "client": state.client or "",
+            "name": state.name or "",
+            "client": state.name if state.event == "client_ready" else "",
             "status": state.status,
             "source_run_url": state.source_run_url or "",
             "payload": json.dumps(state.outbound_payload, sort_keys=True),
@@ -326,6 +327,7 @@ def _template_context_values() -> tuple[str, ...]:
         "duckdb_version",
         "duckdb_commit",
         "event",
+        "name",
         "client",
         "status",
         "source_run_url",
