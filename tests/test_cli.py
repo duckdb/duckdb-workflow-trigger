@@ -85,6 +85,21 @@ hooks:
     )
 
 
+def write_failure_dispatch_config(path: Path):
+    path.write_text(
+        """
+hooks:
+  check:
+    benchmark:
+      "2":
+        - workflow: duckdblabs/duckdb-dev-dashboard/update_dashboard.yml@main
+          inputs: null
+          status: [failure, success]
+""",
+        encoding="utf-8",
+    )
+
+
 def test_cli_stores_failure_without_dispatch(tmp_path, monkeypatch, capsys):
     config = tmp_path / "endpoints.yml"
     write_config(config)
@@ -117,6 +132,45 @@ def test_cli_stores_failure_without_dispatch(tmp_path, monkeypatch, capsys):
     assert len(FakeStore.created) == 1
     assert FakeDispatcher.dispatched == []
     assert "skipping outbound dispatch" in capsys.readouterr().out
+
+
+def test_cli_dispatches_failure_to_endpoint_configured_for_failure(
+    tmp_path, monkeypatch
+):
+    config = tmp_path / "endpoints.yml"
+    write_failure_dispatch_config(config)
+    FakeStore.created = []
+    FakeDispatcher.attempted = []
+    FakeDispatcher.dispatched = []
+    FakeDispatcher.failing_repos = set()
+    monkeypatch.setattr(cli, "S3StateStore", FakeStore)
+    monkeypatch.setattr(cli, "GitHubDispatcher", FakeDispatcher)
+
+    result = cli.main(
+        [
+            "--event",
+            "check",
+            "--name",
+            "benchmark",
+            "--duckdb-version",
+            "v2.0.7",
+            "--duckdb-commit",
+            "0123456789abcdef0123456789abcdef01234567",
+            "--status",
+            "failure",
+            "--endpoint-config",
+            str(config),
+            "--bucket",
+            "duckdb-release-state",
+            "--dry-run-github",
+        ]
+    )
+
+    assert result == 0
+    assert FakeStore.created[0].status == "failure"
+    assert [endpoint.repo for endpoint, _state, _request in FakeDispatcher.dispatched] == [
+        "duckdb-dev-dashboard"
+    ]
 
 
 def test_cli_warns_for_unknown_client_but_stores(tmp_path, monkeypatch, capsys):

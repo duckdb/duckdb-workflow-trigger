@@ -6,8 +6,8 @@ dispatcher for DuckDB release state.
 ## Usage
 
 The release dispatcher accepts `core_ready`, `client_ready`, and `check` workflow
-dispatch events, creates an immutable state file in S3, and dispatches successful
-events to registered downstream repository workflows.
+dispatch events, creates an immutable state file in S3, and dispatches events to
+registered downstream repository workflows based on their configured statuses.
 
 The `client_ready` and `check` events are named. Use `name` for new calls. The
 legacy `client` input remains supported as an alias for `name` on `client_ready`
@@ -80,14 +80,18 @@ hooks:
 Each downstream name contains its release-line routes. An exact `major.minor`
 route wins over the `major` fallback, so `v2.0.7` uses `"2.0"` while `v2.1.0`
 uses `"2"`. A major route matches only that major version. Release-line keys
-must be quoted so YAML treats them as strings. If a successful event has no
-route for an applicable downstream, dispatch fails before its immutable state
-is written.
+must be quoted so YAML treats them as strings. If an event matches an endpoint's
+configured status but has no release route, dispatch fails before its immutable
+state is written.
 
 An endpoint that omits `inputs` inherits `defaults.inputs`. Any explicit input
 mapping or list replaces the defaults instead of merging with them. Use
 `inputs: null` or an empty list to send no inputs. If `defaults` is omitted,
 endpoints without inputs retain the legacy empty-input behavior.
+
+Endpoints dispatch successful events by default. Set `status` to a non-empty
+list of `failure`, `success`, or `skipped` to override that behavior for an
+individual workflow.
 
 `workflow` uses `owner/repo/workflow.yml@ref`; the receiver workflow runs at
 that ref. Mapping-form inputs support receiver-specific names, static values,
@@ -104,8 +108,8 @@ target, for example:
 Dispatched core_ready.python for DuckDB v2.0.7 (release line 2.0) to duckdb/duckdb-python/release.yml@v2.0-cyanoptera
 ```
 
-Named checks use the same endpoint shape when a successful check should trigger
-another workflow:
+Named checks use the same endpoint shape. For example, this workflow runs when
+the benchmark check reports either failure or success:
 
 ```yaml
 hooks:
@@ -114,6 +118,7 @@ hooks:
       - workflow: duckdb/example/AfterBenchmark.yml@main
         inputs:
           duckdb-sha: "{duckdb_commit}"
+        status: [failure, success]
 ```
 
 A check does not need an endpoint to be recorded. For example, the benchmark

@@ -54,3 +54,12 @@ hooks:
             - duckdb_version
             - duckdb_commit
             - payload
+
+  check:
+    benchmark:
+      "2":
+        # Refresh the development dashboard after successful benchmark checks.
+        - workflow: duckdblabs/duckdb-dev-dashboard/update_dashboard.yml@main
+          # This workflow has no workflow_dispatch inputs, so do not inherit defaults.
+          inputs: null
+          status: [failure, success]

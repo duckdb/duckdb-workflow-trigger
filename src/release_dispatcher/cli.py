@@ -91,13 +91,11 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
 
-    endpoints_to_dispatch: list[Endpoint] = []
-    if state.should_dispatch:
-        try:
-            endpoints_to_dispatch = matching_endpoints(endpoints, state)
-        except ValueError as exc:
-            print(f"ERROR: {exc}", file=sys.stderr)
-            return 1
+    try:
+        endpoints_to_dispatch = matching_endpoints(endpoints, state)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
 
     store = S3StateStore(
         S3Settings(
@@ -114,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"Wrote state to s3://{args.bucket}/{key}")
 
-    if not state.should_dispatch:
+    if not endpoints_to_dispatch and not state.should_dispatch:
         print(f"Stored {state.status} state; skipping outbound dispatch")
         return 0
 

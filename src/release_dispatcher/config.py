@@ -4,10 +4,11 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from string import Formatter
+from typing import cast
 
 import yaml
 
-from release_dispatcher.models import ReleaseState
+from release_dispatcher.models import ReleaseState, ReleaseStatus, VALID_STATUSES
 
 
 RELEASE_LINE_PATTERN = re.compile(r"^(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?$")
@@ -15,6 +16,7 @@ DUCKDB_VERSION_PATTERN = re.compile(
     r"^v?(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)(?:[.\-+].+)?$"
 )
 _INPUTS_UNSET = object()
+_STATUS_UNSET = object()
 
 
 @dataclass(frozen=True)
@@ -27,6 +29,7 @@ class Endpoint:
     ref: str = "main"
     inputs: dict[str, str] | None = None
     release_line: str | None = None
+    statuses: frozenset[ReleaseStatus] = frozenset({"success"})
 
     @property
     def target(self) -> str:
@@ -99,6 +102,7 @@ def matching_endpoints(endpoints: list[Endpoint], state: ReleaseState) -> list[E
     matches = [endpoint for endpoint in endpoints if endpoint.hook == state.event]
     if state.name is not None:
         matches = [endpoint for endpoint in matches if endpoint.name == state.name]
+    matches = [endpoint for endpoint in matches if state.status in endpoint.statuses]
 
     grouped: dict[str, list[Endpoint]] = {}
     for endpoint in matches:
@@ -205,6 +209,9 @@ def _endpoints_for_targets(
             inputs = dict(default_inputs) if default_inputs is not None else None
         else:
             inputs = _parse_inputs(configured_inputs, endpoint_context)
+        statuses = _parse_statuses(
+            endpoint_config.get("status", _STATUS_UNSET), endpoint_context
+        )
         endpoints.append(
             Endpoint(
                 name=name,
@@ -215,6 +222,7 @@ def _endpoints_for_targets(
                 ref=ref,
                 inputs=inputs,
                 release_line=release_line,
+                statuses=statuses,
             )
         )
     return endpoints
@@ -226,6 +234,27 @@ def _parse_default_inputs(defaults: object) -> dict[str, str] | None:
     if not isinstance(defaults, dict):
         raise ValueError("endpoint config defaults must be a mapping")
     return _parse_inputs(defaults.get("inputs"), "defaults")
+
+
+def _parse_statuses(statuses: object, context: str) -> frozenset[ReleaseStatus]:
+    if statuses is _STATUS_UNSET:
+        return frozenset({"success"})
+    if not isinstance(statuses, list) or not statuses:
+        raise ValueError(f"endpoint {context} status must be a non-empty list")
+
+    parsed: set[ReleaseStatus] = set()
+    for index, value in enumerate(statuses):
+        status = _non_empty_string(value, f"status for {context}[{index}]")
+        if status not in VALID_STATUSES:
+            raise ValueError(
+                f"status {status!r} for endpoint {context} must be one of "
+                f"{sorted(VALID_STATUSES)}"
+            )
+        typed_status = cast(ReleaseStatus, status)
+        if typed_status in parsed:
+            raise ValueError(f"status {status!r} for endpoint {context} is duplicated")
+        parsed.add(typed_status)
+    return frozenset(parsed)
 
 
 def _select_release_line(duckdb_version: str, release_lines: set[str]) -> str | None:
