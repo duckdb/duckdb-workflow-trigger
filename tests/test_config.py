@@ -305,6 +305,65 @@ hooks:
     ]
 
 
+def test_matching_endpoints_filters_by_configured_status(tmp_path: Path):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        """
+hooks:
+  check:
+    benchmark:
+      - workflow: duckdb/default/OnSuccess.yml@main
+      - workflow: duckdb/configured/OnCompletion.yml@main
+        status: [failure, success]
+""",
+        encoding="utf-8",
+    )
+    endpoints = load_endpoints(config)
+
+    def matches(status: str) -> list[str]:
+        state = parse_release_state(
+            event="check",
+            duckdb_version="v2.0.7",
+            duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+            status=status,
+            name="benchmark",
+        )
+        return [endpoint.repo for endpoint in matching_endpoints(endpoints, state)]
+
+    assert endpoints[0].statuses == {"success"}
+    assert matches("failure") == ["configured"]
+    assert matches("success") == ["default", "configured"]
+    assert matches("skipped") == []
+
+
+@pytest.mark.parametrize(
+    "configured_status",
+    [
+        "success",
+        "[]",
+        "[success, unknown]",
+        "[success, success]",
+    ],
+)
+def test_load_endpoints_rejects_invalid_status_lists(
+    tmp_path: Path, configured_status: str
+):
+    config = tmp_path / "endpoints.yml"
+    config.write_text(
+        f"""
+hooks:
+  check:
+    benchmark:
+      - workflow: duckdb/foo/AfterBenchmark.yml@main
+        status: {configured_status}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="status"):
+        load_endpoints(config)
+
+
 def test_matching_endpoints_rejects_unconfigured_release_line(tmp_path: Path):
     config = tmp_path / "endpoints.yml"
     config.write_text(

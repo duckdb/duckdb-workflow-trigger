@@ -62,3 +62,4 @@ hooks:
         - workflow: duckdblabs/duckdb-dev-dashboard/update_dashboard.yml@main
           # This workflow has no workflow_dispatch inputs, so do not inherit defaults.
           inputs: null
+          status: [failure, success]

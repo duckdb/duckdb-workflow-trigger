@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from release_dispatcher.config import load_endpoints, matching_endpoints
 from release_dispatcher.models import parse_release_state
 
@@ -85,14 +87,15 @@ def test_repository_endpoints_apply_and_replace_default_inputs():
     }
 
 
-def test_repository_endpoints_route_v2_benchmark_check_to_dashboard_without_inputs():
+@pytest.mark.parametrize("status", ["failure", "success"])
+def test_repository_endpoints_route_v2_benchmark_check_to_dashboard_without_inputs(status):
     endpoints = load_endpoints(Path("endpoints.yml"))
     state = parse_release_state(
         event="check",
         name="benchmark",
         duckdb_version="v2.0.7",
         duckdb_commit="0123456789abcdef0123456789abcdef01234567",
-        status="success",
+        status=status,
     )
 
     selected = matching_endpoints(endpoints, state)
@@ -103,4 +106,5 @@ def test_repository_endpoints_route_v2_benchmark_check_to_dashboard_without_inpu
     )
 
     assert endpoint.release_line == "2"
+    assert endpoint.statuses == {"failure", "success"}
     assert endpoint.render_inputs(state) == {}
