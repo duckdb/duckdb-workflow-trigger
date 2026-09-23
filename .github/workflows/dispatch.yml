@@ -1,4 +1,5 @@
 name: DuckDB Release Dispatch
+run-name: "Dispatch: ${{ inputs.event }}${{ (inputs.name || inputs.client) && format(': {0}', inputs.name || inputs.client) || '' }} (${{ inputs.duckdb_version }})"
 
 on:
   workflow_dispatch:
