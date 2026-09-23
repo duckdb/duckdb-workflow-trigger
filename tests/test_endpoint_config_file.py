@@ -9,7 +9,7 @@ def test_repository_endpoints_file_includes_required_hooks():
 
     hooks = {endpoint.hook for endpoint in endpoints}
 
-    assert {"core_ready", "client_ready"} <= hooks
+    assert {"core_ready", "client_ready", "check"} <= hooks
 
 
 def test_repository_endpoints_route_python_by_release_line():
@@ -83,3 +83,24 @@ def test_repository_endpoints_apply_and_replace_default_inputs():
         "duckdb_commit": commit,
         "payload": '{"name": "r", "phase": "client_ready"}',
     }
+
+
+def test_repository_endpoints_route_v2_benchmark_check_to_dashboard_without_inputs():
+    endpoints = load_endpoints(Path("endpoints.yml"))
+    state = parse_release_state(
+        event="check",
+        name="benchmark",
+        duckdb_version="v2.0.7",
+        duckdb_commit="0123456789abcdef0123456789abcdef01234567",
+        status="success",
+    )
+
+    selected = matching_endpoints(endpoints, state)
+    endpoint = next(
+        endpoint
+        for endpoint in selected
+        if endpoint.target == "duckdblabs/duckdb-dev-dashboard/update_dashboard.yml@main"
+    )
+
+    assert endpoint.release_line == "2"
+    assert endpoint.render_inputs(state) == {}
