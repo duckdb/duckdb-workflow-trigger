@@ -87,6 +87,29 @@ def test_repository_endpoints_apply_and_replace_default_inputs():
     }
 
 
+def test_repository_endpoints_send_duckdb_rs_release_line():
+    endpoints = load_endpoints(Path("endpoints.yml"))
+    commit = "0123456789abcdef0123456789abcdef01234567"
+
+    def rs_inputs(version):
+        state = parse_release_state(
+            event="core_ready",
+            duckdb_version=version,
+            duckdb_commit=commit,
+            status="success",
+        )
+        [rs] = [e for e in matching_endpoints(endpoints, state) if e.name == "duckdb-rs"]
+        assert rs.target == "duckdb/duckdb-rs/release_version_pr.yml@main"
+        return rs.render_inputs(state)
+
+    assert rs_inputs("v2.0.7") == {
+        "duckdb-sha": commit,
+        "duckdb-version": "v2.0.7",
+        "release-line": "2.0",
+    }
+    assert rs_inputs("v2.1.0-alpha1")["release-line"] == "2.1"
+
+
 @pytest.mark.parametrize("status", ["failure", "success"])
 def test_repository_endpoints_route_v2_benchmark_check_to_dashboard_without_inputs(status):
     endpoints = load_endpoints(Path("endpoints.yml"))

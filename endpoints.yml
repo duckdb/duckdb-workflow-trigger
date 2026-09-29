@@ -40,8 +40,19 @@ hooks:
       "2":
         - workflow: duckdblabs/duckdb-benchmark/Benchmark.yml@main
     duckdb-rs:
+      # Both lines run on main; release-line keeps a separate bump PR per line.
+      "2.0":
+        - workflow: duckdb/duckdb-rs/release_version_pr.yml@main
+          inputs:
+            duckdb-sha: "{duckdb_commit}"
+            duckdb-version: "{duckdb_version}"
+            release-line: "2.0"
       "2":
         - workflow: duckdb/duckdb-rs/release_version_pr.yml@main
+          inputs:
+            duckdb-sha: "{duckdb_commit}"
+            duckdb-version: "{duckdb_version}"
+            release-line: "2.1"
 
   # Trigger client-specific workflows after a client release is ready.
   # Group endpoints by client name so the payload matches the downstream release.
