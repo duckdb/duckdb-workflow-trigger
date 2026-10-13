@@ -1,0 +1,4 @@
+self-hosted-runner:
+  labels:
+    - namespace-profile-linux-slim
+    - namespace-profile-linux-slim;job.priority=1
