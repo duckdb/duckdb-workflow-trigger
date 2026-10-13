@@ -20,7 +20,7 @@ on:
 
 jobs:
   build-linux:
-    runs-on: ubuntu-latest
+    runs-on: "namespace-profile-linux-slim;job.priority=1"
 
     env:
       PAT_USER: ${{ secrets.PAT_USER }}

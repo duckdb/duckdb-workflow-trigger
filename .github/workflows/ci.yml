@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-slim
 
     steps:
       - uses: actions/checkout@v6
