@@ -45,6 +45,7 @@ def test_repository_endpoints_route_python_by_release_line():
         "odbc",
         "benchmark",
         "duckdb-rs",
+        "go",
     }
 
 
@@ -78,6 +79,7 @@ def test_repository_endpoints_apply_and_replace_default_inputs():
     assert core["java"].render_inputs(core_state) == expected_defaults
     assert core["odbc"].render_inputs(core_state) == expected_defaults
     assert core["benchmark"].render_inputs(core_state) == expected_defaults
+    assert core["go"].render_inputs(core_state) == expected_defaults
 
     [r_endpoint] = matching_endpoints(endpoints, client_state)
     assert r_endpoint.render_inputs(client_state) == {
