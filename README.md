@@ -3,6 +3,36 @@
 This repository contains the existing nightly workflow trigger and a release event
 dispatcher for DuckDB release state.
 
+## Scheduled CI
+
+The workflow trigger uses Amsterdam local time (`Europe/Amsterdam`):
+
+| Start time | Days | `main` | Recently changed release branches |
+| --- | --- | --- | --- |
+| 02:50 | Every day | With tests | With tests |
+| 09:50 | Mon–Fri | Without tests | — |
+| 11:50 | Mon–Fri | Without tests | Without tests |
+| 13:50 | Mon–Fri | With tests | — |
+| 15:50 | Mon–Fri | Without tests | — |
+
+Runs without tests warm the CI caches. Start times are ten minutes before whole
+hours to avoid the hourly GitHub task queue spike. GitHub handles daylight-saving
+transitions through the schedule's timezone setting.
+
+Scheduled `Main.yml` runs always include `main`. Release branches, including
+`v2.0-cyanoptera`, are eligible only when their tip commit's committer timestamp is
+within the last 48 hours. The existing release-branch naming pattern is retained;
+feature branches are excluded.
+
+`NightlyTests.yml`, eligible older-branch `InvokeCI.yml`, and the maintenance and
+distribution workflows run only in the 02:50 nightly slot. Weekends have only
+this nightly slot.
+
+The standard-library Python helper in `scripts/workflow_trigger.py` routes events,
+selects branches, and plans dispatches. Manual nightly runs retain their existing
+48-hour change gate (including for `main`) and `skip_tests` input. Manual runs with
+`trigger-nightly=false` retain the WASM dispatch path.
+
 ## Usage
 
 The release dispatcher accepts `core_ready`, `client_ready`, and `check` workflow
